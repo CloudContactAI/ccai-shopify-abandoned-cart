@@ -2,6 +2,7 @@
   "name": "ccai-shopify-abandoned-cart-frontend",
   "version": "1.0.0",
   "private": true,
+  "license": "MIT",
   "scripts": {
     "build": "vite build",
     "dev": "vite",

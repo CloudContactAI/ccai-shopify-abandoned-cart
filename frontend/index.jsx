@@ -1,3 +1,10 @@
+/**
+ * Frontend entry point for the CloudContactAI Abandoned Cart Recovery app
+ * 
+ * @license MIT
+ * @copyright 2025 CloudContactAI LLC
+ */
+
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';

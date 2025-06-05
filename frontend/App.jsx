@@ -1,3 +1,10 @@
+/**
+ * Main App component for the CloudContactAI Abandoned Cart Recovery app
+ * 
+ * @license MIT
+ * @copyright 2025 CloudContactAI LLC
+ */
+
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { Frame, Navigation } from '@shopify/polaris';
@@ -50,5 +57,7 @@ const App = () => {
     </Frame>
   );
 };
+
+export default App;
 
 export default App;

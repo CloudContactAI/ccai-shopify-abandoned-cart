@@ -1,3 +1,12 @@
+/**
+ * CloudContactAI Abandoned Cart Recovery for Shopify
+ * 
+ * Main server file
+ * 
+ * @license MIT
+ * @copyright 2025 CloudContactAI LLC
+ */
+
 require('dotenv').config();
 const express = require('express');
 const cookieParser = require('cookie-parser');
