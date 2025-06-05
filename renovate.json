@@ -1,0 +1,38 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:base"
+  ],
+  "packageRules": [
+    {
+      "matchUpdateTypes": ["minor", "patch"],
+      "matchCurrentVersion": "!/^0/",
+      "automerge": true
+    },
+    {
+      "matchDepTypes": ["devDependencies"],
+      "matchPackagePatterns": ["lint", "prettier", "biome", "jest", "test"],
+      "automerge": true
+    },
+    {
+      "matchPackagePatterns": ["^@shopify/"],
+      "groupName": "shopify packages"
+    },
+    {
+      "matchPackagePatterns": ["^@types/"],
+      "automerge": true
+    },
+    {
+      "matchPackageNames": ["mongoose"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "mongoose"
+    }
+  ],
+  "schedule": ["every weekend"],
+  "labels": ["dependencies"],
+  "prHourlyLimit": 4,
+  "prConcurrentLimit": 10,
+  "rangeStrategy": "pin",
+  "semanticCommits": "enabled",
+  "dependencyDashboard": true
+}
