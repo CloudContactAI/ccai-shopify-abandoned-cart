@@ -1,9 +1,9 @@
 import React from 'react';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from 'react-query';
+import { render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import SettingsPage from '../pages/SettingsPage';
 
-// Create a test QueryClient
+// Create a test QueryClient with retry disabled for tests
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -12,58 +12,58 @@ const queryClient = new QueryClient({
   },
 });
 
-// Mock the API responses
-jest.mock('react-query', () => ({
-  ...jest.requireActual('react-query'),
+// Mock React Query hooks
+jest.mock('@tanstack/react-query', () => ({
+  ...jest.requireActual('@tanstack/react-query'),
   useQuery: jest.fn(),
   useMutation: jest.fn(),
   useQueryClient: jest.fn(),
 }));
 
-const { useQuery, useMutation, useQueryClient } = require('react-query');
+const { useQuery, useMutation, useQueryClient } = require('@tanstack/react-query');
 
-// Wrap component with necessary providers
-const renderWithProviders = (component) => {
-  return render(
-    <QueryClientProvider client={queryClient}>
-      {component}
-    </QueryClientProvider>
-  );
+// Helper to mock useQuery hook for settings data
+const mockUseQueryForSettings = (settingsData, isLoading = false) => {
+  useQuery.mockImplementation(() => ({
+    isLoading,
+    data: settingsData,
+  }));
+};
+
+// Helper to mock useMutation hook
+const mockUseMutation = (mutateFn = jest.fn(), isLoading = false) => {
+  useMutation.mockImplementation(() => ({
+    mutate: mutateFn,
+    isLoading,
+  }));
 };
 
 describe('SettingsPage', () => {
   beforeEach(() => {
-    // Reset mocks
-    useQuery.mockReset();
-    useMutation.mockReset();
-    useQueryClient.mockReset();
-    
+    jest.clearAllMocks();
+
     // Mock useQueryClient
     useQueryClient.mockReturnValue({
       invalidateQueries: jest.fn(),
     });
-    
-    // Mock useMutation
-    useMutation.mockImplementation(() => ({
-      mutate: jest.fn(),
-      isLoading: false,
-    }));
+
+    // Default mutation mock
+    mockUseMutation();
   });
 
   it('renders loading state', () => {
-    // Mock loading state
-    useQuery.mockImplementation(() => ({
-      isLoading: true,
-      data: null,
-    }));
+    mockUseQueryForSettings(null, true);
 
-    renderWithProviders(<SettingsPage />);
-    
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SettingsPage />
+      </QueryClientProvider>
+    );
+
     expect(screen.getByText('Loading settings...')).toBeInTheDocument();
   });
 
   it('renders settings form with data', async () => {
-    // Mock settings data
     const mockSettings = {
       shopName: 'Test Shop',
       ccai: {
@@ -76,14 +76,15 @@ describe('SettingsPage', () => {
         messageTemplate: 'Hi ${firstName}, complete your purchase: ${cartUrl}',
       },
     };
-    
-    useQuery.mockImplementation(() => ({
-      isLoading: false,
-      data: mockSettings,
-    }));
 
-    renderWithProviders(<SettingsPage />);
-    
+    mockUseQueryForSettings(mockSettings);
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SettingsPage />
+      </QueryClientProvider>
+    );
+
     await waitFor(() => {
       expect(screen.getByText('Settings')).toBeInTheDocument();
       expect(screen.getByLabelText('Shop Name')).toHaveValue('Test Shop');
@@ -94,20 +95,20 @@ describe('SettingsPage', () => {
   });
 
   it('renders test SMS form', async () => {
-    // Mock settings data
-    useQuery.mockImplementation(() => ({
-      isLoading: false,
-      data: {
-        shopName: 'Test Shop',
-        ccai: {
-          clientId: 'test-client-id',
-          apiKey: 'test-api-key',
-        },
+    mockUseQueryForSettings({
+      shopName: 'Test Shop',
+      ccai: {
+        clientId: 'test-client-id',
+        apiKey: 'test-api-key',
       },
-    }));
+    });
 
-    renderWithProviders(<SettingsPage />);
-    
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SettingsPage />
+      </QueryClientProvider>
+    );
+
     await waitFor(() => {
       expect(screen.getByText('Test SMS')).toBeInTheDocument();
       expect(screen.getByLabelText('First Name')).toBeInTheDocument();

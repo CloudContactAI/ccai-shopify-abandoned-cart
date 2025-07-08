@@ -15,10 +15,11 @@
     "format:fix": "biome format --write ."
   },
   "dependencies": {
-    "@shopify/app-bridge": "^3.7.9",
-    "@shopify/app-bridge-react": "^3.7.9",
+    "@shopify/app-bridge": "^3.7.10",
+    "@shopify/app-bridge-react": "^3.7.10",
     "@shopify/polaris": "^11.1.2",
     "@shopify/polaris-icons": "^7.8.0",
+    "@tanstack/react-query": "^4.36.1",
     "@vitejs/plugin-react": "^4.0.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

@@ -6,12 +6,14 @@ const cartService = require('../services/cart');
 const handleCartCreate = async (topic, shop, body) => {
   try {
     const cart = JSON.parse(body);
-    console.log(`Cart created for shop ${shop}: ${cart.id}`);
+    if (!cart?.id) throw new Error('Missing cart ID');
     
-    // Store the cart in our database for tracking
+    console.log(`[Webhook] Cart created for shop ${shop}: ${cart.id}`);
+
     await cartService.storeCart(shop, cart);
   } catch (error) {
-    console.error(`Error handling ${topic} webhook for ${shop}:`, error);
+    console.error(`[Webhook Error] ${topic} for ${shop}:`, error.message);
+    if (process.env.NODE_ENV === 'development') console.error(error.stack);
   }
 };
 
@@ -21,12 +23,14 @@ const handleCartCreate = async (topic, shop, body) => {
 const handleCartUpdate = async (topic, shop, body) => {
   try {
     const cart = JSON.parse(body);
-    console.log(`Cart updated for shop ${shop}: ${cart.id}`);
+    if (!cart?.id) throw new Error('Missing cart ID');
     
-    // Update the cart in our database
+    console.log(`[Webhook] Cart updated for shop ${shop}: ${cart.id}`);
+
     await cartService.updateCart(shop, cart);
   } catch (error) {
-    console.error(`Error handling ${topic} webhook for ${shop}:`, error);
+    console.error(`[Webhook Error] ${topic} for ${shop}:`, error.message);
+    if (process.env.NODE_ENV === 'development') console.error(error.stack);
   }
 };
 
@@ -36,19 +40,21 @@ const handleCartUpdate = async (topic, shop, body) => {
 const handleCheckoutCreate = async (topic, shop, body) => {
   try {
     const checkout = JSON.parse(body);
-    console.log(`Checkout created for shop ${shop}: ${checkout.id}`);
-    
-    // If the checkout is associated with a cart, mark the cart as converted
-    if (checkout.cart_token) {
+    console.log(`[Webhook] Checkout created for shop ${shop}: ${checkout.id}`);
+
+    if (checkout?.cart_token) {
       await cartService.markCartAsConverted(shop, checkout.cart_token);
+    } else {
+      console.warn(`[Webhook] Checkout ${checkout.id} missing cart_token`);
     }
   } catch (error) {
-    console.error(`Error handling ${topic} webhook for ${shop}:`, error);
+    console.error(`[Webhook Error] ${topic} for ${shop}:`, error.message);
+    if (process.env.NODE_ENV === 'development') console.error(error.stack);
   }
 };
 
 module.exports = {
   handleCartCreate,
   handleCartUpdate,
-  handleCheckoutCreate
+  handleCheckoutCreate,
 };

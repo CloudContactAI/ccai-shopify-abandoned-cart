@@ -4,114 +4,134 @@ import {
   Layout,
   Card,
   ResourceList,
-  TextStyle,
-  Button,
   Badge,
-  Stack,
+  Pagination,
+  EmptyState,
   Filters,
   Select,
-  Frame,
-  Toast,
-  EmptyState
+  Text,
+  SkeletonBodyText,
+  Banner,
 } from '@shopify/polaris';
-import { useQuery, useMutation, useQueryClient } from 'react-query';
+import { useQuery } from '@tanstack/react-query';
+import { useAppBridge } from '@shopify/app-bridge-react';
+import { authenticatedFetch } from '@shopify/app-bridge-utils';
+
+import { useShop } from '../ShopContext';
+
+const STATUS_BADGES = {
+  sent: <Badge status="success">Sent</Badge>,
+  delivered: <Badge status="success">Delivered</Badge>,
+  failed: <Badge status="critical">Failed</Badge>,
+};
+
+const TYPE_BADGES = {
+  abandoned_cart: <Badge status="info">Abandoned Cart</Badge>,
+  test: <Badge status="attention">Test</Badge>,
+  other: <Badge>Other</Badge>,
+};
+
+const getStatusBadge = (status) => STATUS_BADGES[status] ?? <Badge>Unknown</Badge>;
+const getTypeBadge = (type) => TYPE_BADGES[type] ?? <Badge>Other</Badge>;
 
 const AbandonedCartsPage = () => {
-  const queryClient = useQueryClient();
-  const [selectedItems, setSelectedItems] = useState([]);
-  const [hourFilter, setHourFilter] = useState('24');
-  const [showToast, setShowToast] = useState(false);
-  const [toastContent, setToastContent] = useState({ content: '', error: false });
+  const [page, setPage] = useState(1);
+  const [typeFilter, setTypeFilter] = useState('abandoned_cart');
 
-  // Fetch abandoned carts
-  const { data: carts, isLoading } = useQuery(['abandoned-carts', hourFilter], async () => {
-    const response = await fetch(`/api/abandoned-carts?hours=${hourFilter}`);
-    if (!response.ok) throw new Error('Failed to fetch abandoned carts');
-    return response.json();
-  });
+  const app = useAppBridge();
+  const fetch = authenticatedFetch(app);
+  const { shop, host, loading: contextLoading, error: contextError } = useShop();
 
-  // Send reminders mutation
-  const sendReminders = useMutation(
-    async (cartIds) => {
-      const response = await fetch('/api/trigger-reminders', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ cartIds })
-      });
-      
-      if (!response.ok) throw new Error('Failed to send reminders');
+  const {
+    data,
+    isLoading,
+    isError,
+    error,
+  } = useQuery(
+    ['abandoned-cart-history', page, typeFilter, shop],
+    async () => {
+      if (!shop) throw new Error('Shop is not defined');
+      let url = `/api/sms-history?page=${page}&limit=20&type=abandoned_cart`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Failed to fetch abandoned cart messages');
       return response.json();
     },
-    {
-      onSuccess: (data) => {
-        queryClient.invalidateQueries('abandoned-carts');
-        setToastContent({ 
-          content: `Successfully sent ${data.processed} reminders`, 
-          error: false 
-        });
-        setShowToast(true);
-        setSelectedItems([]);
-      },
-      onError: (error) => {
-        setToastContent({ 
-          content: `Error: ${error.message}`, 
-          error: true 
-        });
-        setShowToast(true);
-      }
-    }
+    { enabled: !!shop }
   );
 
-  // Handle sending reminders for selected carts
-  const handleSendReminders = () => {
-    sendReminders.mutate(selectedItems);
-  };
-
-  // Filter options
-  const hourOptions = [
-    { label: 'Last 1 hour', value: '1' },
-    { label: 'Last 6 hours', value: '6' },
-    { label: 'Last 12 hours', value: '12' },
-    { label: 'Last 24 hours', value: '24' },
-    { label: 'Last 48 hours', value: '48' }
-  ];
-
-  // Format currency
-  const formatCurrency = (value) => {
-    return `$${parseFloat(value).toFixed(2)}`;
-  };
-
-  // Calculate cart total
-  const getCartTotal = (cart) => {
-    if (!cart.cartData || !cart.cartData.line_items) return 0;
-    
-    return cart.cartData.line_items.reduce((total, item) => {
-      return total + (parseFloat(item.price) * item.quantity);
-    }, 0);
-  };
-
-  // Format date
   const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleString();
+    if (!dateString) return '';
+    return new Date(dateString).toLocaleString();
   };
 
-  // Empty state
-  if (!isLoading && (!carts || carts.length === 0)) {
+  if (contextLoading || isLoading) {
     return (
-      <Page title="Abandoned Carts">
+      <Page title="Abandoned Cart Messages">
+        <Layout>
+          <Layout.Section>
+            <Card sectioned>
+              <SkeletonBodyText lines={6} />
+            </Card>
+          </Layout.Section>
+        </Layout>
+      </Page>
+    );
+  }
+
+  if (contextError) {
+    return (
+      <Page title="Abandoned Cart Messages">
+        <Layout>
+          <Layout.Section>
+            <Banner title="Context error" status="critical">
+              <p>{contextError}</p>
+            </Banner>
+          </Layout.Section>
+        </Layout>
+      </Page>
+    );
+  }
+
+  if (!shop) {
+    return (
+      <Page title="Abandoned Cart Messages">
+        <Layout>
+          <Layout.Section>
+            <Banner title="Missing shop context" status="warning">
+              <p>This page requires a valid shop to display abandoned cart messages. Try reloading from the Shopify admin.</p>
+            </Banner>
+          </Layout.Section>
+        </Layout>
+      </Page>
+    );
+  }
+
+  if (isError) {
+    return (
+      <Page title="Abandoned Cart Messages">
+        <Layout>
+          <Layout.Section>
+            <Banner title="Error loading abandoned carts" status="critical">
+              <p>{error?.message || 'An unknown error occurred.'}</p>
+            </Banner>
+          </Layout.Section>
+        </Layout>
+      </Page>
+    );
+  }
+
+  if (!Array.isArray(data?.history) || data.history.length === 0) {
+    return (
+      <Page title="Abandoned Cart Messages">
         <Layout>
           <Layout.Section>
             <Card sectioned>
               <EmptyState
-                heading="No abandoned carts found"
+                heading="No abandoned cart messages found"
                 image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
               >
                 <p>
-                  No customers have abandoned their carts in the selected time period.
-                  Check back later or adjust the time filter.
+                  No messages have been sent for abandoned carts yet. Try enabling recovery or send a test message from the settings page.
                 </p>
               </EmptyState>
             </Card>
@@ -122,106 +142,104 @@ const AbandonedCartsPage = () => {
   }
 
   return (
-    <Frame>
-      {showToast && (
-        <Toast
-          content={toastContent.content}
-          error={toastContent.error}
-          onDismiss={() => setShowToast(false)}
-        />
-      )}
-      
-      <Page
-        title="Abandoned Carts"
-        primaryAction={{
-          content: 'Send Reminders',
-          disabled: selectedItems.length === 0,
-          onAction: handleSendReminders,
-          loading: sendReminders.isLoading
-        }}
-      >
-        <Layout>
-          <Layout.Section>
-            <Card>
-              <Card.Section>
-                <Filters>
-                  <Filters.Filter
-                    label="Time period"
-                    filter={
+    <Page title="Abandoned Cart Messages">
+      <Layout>
+        <Layout.Section>
+          {/* Debug Info — remove when shipping */}
+          <Banner title="Debug Info" status="info">
+            <p>Shop: {shop}</p>
+            <p>Host: {host}</p>
+          </Banner>
+
+          <Card>
+            <Card.Section>
+              <Filters
+                queryValue={typeFilter}
+                onQueryChange={setTypeFilter}
+                queryPlaceholder="Filter by type"
+                filters={[
+                  {
+                    key: 'type',
+                    label: 'Message type',
+                    filter: (
                       <Select
-                        options={hourOptions}
-                        value={hourFilter}
-                        onChange={setHourFilter}
+                        options={[
+                          { label: 'Abandoned Cart', value: 'abandoned_cart' },
+                          { label: 'Test', value: 'test' },
+                          { label: 'Other', value: 'other' },
+                        ]}
+                        value={typeFilter}
+                        onChange={setTypeFilter}
                         labelHidden
                       />
-                    }
-                  />
-                </Filters>
-              </Card.Section>
-              
-              <ResourceList
-                resourceName={{ singular: 'cart', plural: 'carts' }}
-                items={carts || []}
-                loading={isLoading}
-                selectedItems={selectedItems}
-                onSelectionChange={setSelectedItems}
-                selectable
-                renderItem={(cart) => {
-                  const total = getCartTotal(cart);
-                  const itemCount = cart.cartData?.line_items?.length || 0;
-                  
-                  return (
-                    <ResourceList.Item
-                      id={cart.cartId}
-                      accessibilityLabel={`Cart for ${cart.customer?.firstName || 'Unknown'} ${cart.customer?.lastName || 'Customer'}`}
-                    >
-                      <Stack>
-                        <Stack.Item fill>
-                          <h3>
-                            <TextStyle variation="strong">
-                              {cart.customer?.firstName || 'Unknown'} {cart.customer?.lastName || 'Customer'}
-                            </TextStyle>
-                          </h3>
-                          <div>
-                            {cart.customer?.phone && (
-                              <TextStyle variation="subdued">
-                                Phone: {cart.customer.phone}
-                              </TextStyle>
-                            )}
-                          </div>
-                          <div>
-                            <TextStyle variation="subdued">
-                              Last updated: {formatDate(cart.updatedAt)}
-                            </TextStyle>
-                          </div>
-                        </Stack.Item>
-                        
-                        <Stack.Item>
-                          <Stack vertical spacing="tight">
-                            <Badge status="info">{itemCount} {itemCount === 1 ? 'item' : 'items'}</Badge>
-                            <TextStyle variation="strong">{formatCurrency(total)}</TextStyle>
-                          </Stack>
-                        </Stack.Item>
-                        
-                        <Stack.Item>
-                          <Button
-                            size="slim"
-                            url={`https://${cart.shopDomain}/admin/customers/${cart.customer?.id}`}
-                            external
-                          >
-                            View Customer
-                          </Button>
-                        </Stack.Item>
-                      </Stack>
-                    </ResourceList.Item>
-                  );
-                }}
+                    ),
+                  },
+                ]}
+                hideQueryField
               />
-            </Card>
-          </Layout.Section>
-        </Layout>
-      </Page>
-    </Frame>
+            </Card.Section>
+
+            <ResourceList
+              resourceName={{ singular: 'message', plural: 'messages' }}
+              items={data.history}
+              renderItem={(sms) => {
+                const recipientName = `${sms.recipient?.firstName ?? ''} ${sms.recipient?.lastName ?? ''}`.trim() || 'Unknown Recipient';
+                return (
+                  <ResourceList.Item id={sms._id} accessibilityLabel={`SMS to ${recipientName}`}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'flex-start',
+                        flexWrap: 'wrap',
+                        gap: '1.5rem',
+                      }}
+                    >
+                      <div style={{ flex: 1, minWidth: 200 }}>
+                        <Text as="h3" fontWeight="bold">{recipientName}</Text>
+                        <Text tone="subdued">Phone: {sms.recipient?.phone ?? 'N/A'}</Text>
+                        <Text tone="subdued">Sent: {formatDate(sms.timestamp)}</Text>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 120 }}>
+                        {getStatusBadge(sms.status)}
+                        {getTypeBadge(sms.type)}
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: 10 }}>
+                      <Text>{sms.message}</Text>
+                    </div>
+
+                    {sms.error && (
+                      <div style={{ marginTop: 5 }}>
+                        <Text tone="critical">Error: {sms.error}</Text>
+                      </div>
+                    )}
+                  </ResourceList.Item>
+                );
+              }}
+            />
+
+            {data.pagination?.pages > 1 && (
+              <Card.Section>
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <Pagination
+                    hasPrevious={page > 1}
+                    onPrevious={() => setPage(page - 1)}
+                    hasNext={page < data.pagination.pages}
+                    onNext={() => setPage(page + 1)}
+                    accessibilityLabel="Abandoned cart pagination"
+                    accessibilityPreviousLabel="Previous page"
+                    accessibilityNextLabel="Next page"
+                  />
+                </div>
+              </Card.Section>
+            )}
+          </Card>
+        </Layout.Section>
+      </Layout>
+    </Page>
   );
 };
 

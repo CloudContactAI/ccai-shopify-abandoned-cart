@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Page,
@@ -8,72 +8,91 @@ import {
   SkeletonBodyText,
   Button,
   Banner,
-  Stack,
-  Heading,
-  TextStyle,
-  ProgressBar
+  Text,
+  ProgressBar,
 } from '@shopify/polaris';
-import { useQuery } from 'react-query';
+import { useQuery } from '@tanstack/react-query';
+import { useAppBridge } from '@shopify/app-bridge-react';
+import { authenticatedFetch } from '@shopify/app-bridge-utils';
+
+import { useShop } from '../ShopContext';
 
 const HomePage = () => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [triggerResult, setTriggerResult] = useState(null);
 
-  // Fetch settings to check if the app is configured
-  const { data: settings, isLoading: settingsLoading } = useQuery('settings', async () => {
-    const response = await fetch('/api/settings');
-    if (!response.ok) throw new Error('Failed to fetch settings');
-    return response.json();
-  });
+  const app = useAppBridge();
+  const fetch = authenticatedFetch(app);
+  const { shop } = useShop();
+
+  // Fetch settings, enabled only if shop is defined
+  const { data: settings, isLoading: settingsLoading, isError: settingsError, error: settingsFetchError } = useQuery(
+    ['settings', shop],
+    async () => {
+      if (!shop) throw new Error('Shop is not defined');
+      const response = await fetch('/api/settings'); // backend can use session to identify shop
+      if (!response.ok) throw new Error('Failed to fetch settings');
+      return response.json();
+    },
+    { enabled: !!shop }
+  );
 
   // Fetch abandoned carts count
-  const { data: abandonedCarts, isLoading: cartsLoading } = useQuery('abandoned-carts', async () => {
-    const response = await fetch('/api/abandoned-carts');
-    if (!response.ok) throw new Error('Failed to fetch abandoned carts');
-    return response.json();
-  });
+  const { data: abandonedCarts, isLoading: cartsLoading, isError: cartsError, error: cartsFetchError } = useQuery(
+    ['abandoned-carts'],
+    async () => {
+      if (!shop) throw new Error('Shop is not defined');
+      const response = await fetch('/api/abandoned-carts');
+      if (!response.ok) throw new Error('Failed to fetch abandoned carts');
+      return response.json();
+    },
+    { enabled: !!shop }
+  );
 
-  // Trigger abandoned cart reminders manually
   const triggerReminders = async () => {
+    if (!shop) {
+      setTriggerResult({ error: 'Shop is not defined' });
+      return;
+    }
     setIsLoading(true);
+    setTriggerResult(null);
     try {
-      const response = await fetch('/api/trigger-reminders', {
-        method: 'POST'
-      });
-      
+      const response = await fetch('/api/trigger-reminders', { method: 'POST' });
       if (!response.ok) throw new Error('Failed to trigger reminders');
-      
       const result = await response.json();
       setTriggerResult(result);
     } catch (error) {
-      console.error('Error triggering reminders:', error);
       setTriggerResult({ error: error.message });
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Check if the app is configured
   const isConfigured = settings?.ccai?.clientId && settings?.ccai?.apiKey;
   const isEnabled = settings?.abandonedCartReminders?.enabled;
 
   return (
     <Page title="CloudContactAI Abandoned Cart Reminders">
       <Layout>
-        {/* Configuration Status */}
         <Layout.Section>
           {settingsLoading ? (
             <Card sectioned>
               <SkeletonBodyText />
             </Card>
+          ) : settingsError ? (
+            <Banner title="Error loading settings" status="critical">
+              <Text>{settingsFetchError.message}</Text>
+            </Banner>
           ) : !isConfigured ? (
             <Banner
               title="Setup Required"
               status="warning"
               action={{ content: 'Configure Now', onAction: () => navigate('/settings') }}
             >
-              <p>You need to configure your CloudContactAI credentials before you can send SMS reminders.</p>
+              <Text>
+                You need to configure your CloudContactAI credentials before you can send SMS reminders.
+              </Text>
             </Banner>
           ) : !isEnabled ? (
             <Banner
@@ -81,35 +100,45 @@ const HomePage = () => {
               status="info"
               action={{ content: 'Enable Now', onAction: () => navigate('/settings') }}
             >
-              <p>Abandoned cart reminders are currently disabled. Enable them in settings to start recovering lost sales.</p>
+              <Text>
+                Abandoned cart reminders are currently disabled. Enable them in settings to start recovering lost sales.
+              </Text>
             </Banner>
           ) : (
             <Banner title="Reminders Active" status="success">
-              <p>Your abandoned cart reminders are active and will be sent automatically.</p>
+              <Text>Your abandoned cart reminders are active and will be sent automatically.</Text>
             </Banner>
           )}
         </Layout.Section>
 
-        {/* Stats Cards */}
         <Layout.Section oneHalf>
           <Card title="Abandoned Carts" sectioned>
             {cartsLoading ? (
               <SkeletonBodyText lines={2} />
+            ) : cartsError ? (
+              <Banner title="Error loading carts" status="critical">
+                <Text>{cartsFetchError.message}</Text>
+              </Banner>
             ) : (
-              <TextContainer>
-                <Stack distribution="equalSpacing" alignment="center">
-                  <Heading element="h3">
-                    <TextStyle variation="strong">{abandonedCarts?.length || 0}</TextStyle>
-                  </Heading>
-                  <Button 
-                    primary 
+              <TextContainer spacing="tight">
+                <div
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                >
+                  <Text as="h3" variant="headingMd" fontWeight="bold">
+                    {abandonedCarts?.length ?? 0}
+                  </Text>
+                  <Button
+                    primary
                     disabled={!isConfigured || !isEnabled || isLoading}
                     onClick={() => navigate('/abandoned-carts')}
                   >
                     View Carts
                   </Button>
-                </Stack>
-                <p>Carts abandoned in the last {settings?.abandonedCartReminders?.hourThreshold || 24} hours.</p>
+                </div>
+                <Text>
+                  Carts abandoned in the last{' '}
+                  {settings?.abandonedCartReminders?.hourThreshold ?? 24} hours.
+                </Text>
               </TextContainer>
             )}
           </Card>
@@ -120,50 +149,55 @@ const HomePage = () => {
             {settingsLoading ? (
               <SkeletonBodyText lines={2} />
             ) : (
-              <TextContainer>
+              <TextContainer spacing="tight">
                 <ProgressBar progress={isEnabled ? 100 : isConfigured ? 50 : 25} size="medium" />
-                <p>
+                <Text>
                   {isEnabled
                     ? 'Your abandoned cart recovery system is fully operational.'
                     : isConfigured
                     ? 'Almost there! Enable reminders in settings to complete setup.'
                     : 'Get started by configuring your CloudContactAI credentials.'}
-                </p>
+                </Text>
               </TextContainer>
             )}
           </Card>
         </Layout.Section>
 
-        {/* Manual Trigger Section */}
         <Layout.Section>
           <Card title="Manual Actions" sectioned>
-            <Stack distribution="equalSpacing" alignment="center">
-              <TextContainer>
-                <p>Manually send reminders for all eligible abandoned carts.</p>
-              </TextContainer>
-              <Button 
-                primary 
-                loading={isLoading}
-                disabled={!isConfigured || !isEnabled || cartsLoading || abandonedCarts?.length === 0}
-                onClick={triggerReminders}
+            <TextContainer spacing="loose">
+              <div
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
               >
-                Send Reminders Now
-              </Button>
-            </Stack>
-
-            {triggerResult && (
-              <div style={{ marginTop: '1rem' }}>
-                {triggerResult.error ? (
-                  <Banner title="Error" status="critical">
-                    <p>{triggerResult.error}</p>
-                  </Banner>
-                ) : (
-                  <Banner title="Success" status="success">
-                    <p>Successfully processed {triggerResult.processed} abandoned carts.</p>
-                  </Banner>
-                )}
+                <Text>Manually send reminders for all eligible abandoned carts.</Text>
+                <Button
+                  primary
+                  loading={isLoading}
+                  disabled={
+                    !isConfigured || !isEnabled || cartsLoading || abandonedCarts?.length === 0
+                  }
+                  onClick={triggerReminders}
+                >
+                  Send Reminders Now
+                </Button>
               </div>
-            )}
+
+              {triggerResult && (
+                <div>
+                  {triggerResult.error ? (
+                    <Banner title="Error" status="critical">
+                      <Text>{triggerResult.error}</Text>
+                    </Banner>
+                  ) : (
+                    <Banner title="Success" status="success">
+                      <Text>
+                        Successfully processed {triggerResult.processed} abandoned carts.
+                      </Text>
+                    </Banner>
+                  )}
+                </div>
+              )}
+            </TextContainer>
           </Card>
         </Layout.Section>
       </Layout>

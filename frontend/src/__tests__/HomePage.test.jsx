@@ -1,10 +1,10 @@
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from 'react-query';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
 import HomePage from '../pages/HomePage';
 
-// Create a test QueryClient
+// Create a test QueryClient with retry disabled for tests
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -13,15 +13,31 @@ const queryClient = new QueryClient({
   },
 });
 
-// Mock the API responses
-jest.mock('react-query', () => ({
-  ...jest.requireActual('react-query'),
+// Mock the API responses for useQuery
+jest.mock('@tanstack/react-query', () => ({
+  ...jest.requireActual('@tanstack/react-query'),
   useQuery: jest.fn(),
 }));
 
-const { useQuery } = require('react-query');
+const { useQuery } = require('@tanstack/react-query');
 
-// Wrap component with necessary providers
+// Helper to mock useQuery based on query key
+const mockUseQueryForSettings = (settingsData) => {
+  useQuery.mockImplementation((key) => {
+    if (key === 'settings') {
+      return {
+        isLoading: false,
+        data: settingsData,
+      };
+    }
+    return {
+      isLoading: false,
+      data: [],
+    };
+  });
+};
+
+// Wrap component with necessary providers for routing and react-query context
 const renderWithProviders = (component) => {
   return render(
     <BrowserRouter>
@@ -34,12 +50,11 @@ const renderWithProviders = (component) => {
 
 describe('HomePage', () => {
   beforeEach(() => {
-    // Reset mocks
-    useQuery.mockReset();
+    jest.clearAllMocks();
   });
 
   it('renders loading state', () => {
-    // Mock loading state
+    // Mock loading state of the useQuery hook
     useQuery.mockImplementation(() => ({
       isLoading: true,
       data: null,
@@ -51,27 +66,15 @@ describe('HomePage', () => {
   });
 
   it('renders configuration required banner when not configured', async () => {
-    // Mock settings with no CCAI credentials
-    useQuery.mockImplementation((key) => {
-      if (key === 'settings') {
-        return {
-          isLoading: false,
-          data: {
-            shopName: 'Test Shop',
-            ccai: {
-              clientId: '',
-              apiKey: '',
-            },
-            abandonedCartReminders: {
-              enabled: false,
-            },
-          },
-        };
-      }
-      return {
-        isLoading: false,
-        data: [],
-      };
+    mockUseQueryForSettings({
+      shopName: 'Test Shop',
+      ccai: {
+        clientId: '',
+        apiKey: '',
+      },
+      abandonedCartReminders: {
+        enabled: false,
+      },
     });
 
     renderWithProviders(<HomePage />);
@@ -83,27 +86,15 @@ describe('HomePage', () => {
   });
 
   it('renders reminders disabled banner when configured but disabled', async () => {
-    // Mock settings with CCAI credentials but reminders disabled
-    useQuery.mockImplementation((key) => {
-      if (key === 'settings') {
-        return {
-          isLoading: false,
-          data: {
-            shopName: 'Test Shop',
-            ccai: {
-              clientId: 'test-client-id',
-              apiKey: 'test-api-key',
-            },
-            abandonedCartReminders: {
-              enabled: false,
-            },
-          },
-        };
-      }
-      return {
-        isLoading: false,
-        data: [],
-      };
+    mockUseQueryForSettings({
+      shopName: 'Test Shop',
+      ccai: {
+        clientId: 'test-client-id',
+        apiKey: 'test-api-key',
+      },
+      abandonedCartReminders: {
+        enabled: false,
+      },
     });
 
     renderWithProviders(<HomePage />);
@@ -115,7 +106,18 @@ describe('HomePage', () => {
   });
 
   it('renders active state when configured and enabled', async () => {
-    // Mock settings with CCAI credentials and reminders enabled
+    mockUseQueryForSettings({
+      shopName: 'Test Shop',
+      ccai: {
+        clientId: 'test-client-id',
+        apiKey: 'test-api-key',
+      },
+      abandonedCartReminders: {
+        enabled: true,
+        hourThreshold: 24,
+      },
+    });
+
     useQuery.mockImplementation((key) => {
       if (key === 'settings') {
         return {
@@ -133,6 +135,7 @@ describe('HomePage', () => {
           },
         };
       }
+      // Simulate abandoned carts data for other keys
       return {
         isLoading: false,
         data: [{ id: '123' }, { id: '456' }],
