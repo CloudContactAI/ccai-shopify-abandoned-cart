@@ -9,55 +9,54 @@ const SMSService = require('./sms');
 const storeCart = async (shop, cartData) => {
   try {
     // Check if we already have this cart
-    let cart = await Cart.findOne({ 
-      shopDomain: shop, 
-      cartId: cartData.id 
+    const cart = await Cart.findOne({
+      shopDomain: shop,
+      cartId: cartData.id,
     });
-    
+
     if (cart) {
       // Update existing cart
       cart.updatedAt = new Date();
       cart.cartData = cartData;
-      
+
       if (cartData.customer) {
         cart.customer = {
           id: cartData.customer.id,
           firstName: cartData.customer.first_name,
           lastName: cartData.customer.last_name,
           email: cartData.customer.email,
-          phone: cartData.customer.phone
+          phone: cartData.customer.phone,
         };
       }
-      
+
       await cart.save();
       return cart;
-    } else {
-      // Create new cart
-      const newCart = new Cart({
-        shopDomain: shop,
-        cartId: cartData.id,
-        cartToken: cartData.token,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        cartData: cartData,
-        isAbandoned: false,
-        reminderSent: false,
-        converted: false
-      });
-      
-      if (cartData.customer) {
-        newCart.customer = {
-          id: cartData.customer.id,
-          firstName: cartData.customer.first_name,
-          lastName: cartData.customer.last_name,
-          email: cartData.customer.email,
-          phone: cartData.customer.phone
-        };
-      }
-      
-      await newCart.save();
-      return newCart;
     }
+    // Create new cart
+    const newCart = new Cart({
+      shopDomain: shop,
+      cartId: cartData.id,
+      cartToken: cartData.token,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      cartData: cartData,
+      isAbandoned: false,
+      reminderSent: false,
+      converted: false,
+    });
+
+    if (cartData.customer) {
+      newCart.customer = {
+        id: cartData.customer.id,
+        firstName: cartData.customer.first_name,
+        lastName: cartData.customer.last_name,
+        email: cartData.customer.email,
+        phone: cartData.customer.phone,
+      };
+    }
+
+    await newCart.save();
+    return newCart;
   } catch (error) {
     console.error('Error storing cart:', error);
     throw error;
@@ -69,31 +68,30 @@ const storeCart = async (shop, cartData) => {
  */
 const updateCart = async (shop, cartData) => {
   try {
-    const cart = await Cart.findOne({ 
-      shopDomain: shop, 
-      cartId: cartData.id 
+    const cart = await Cart.findOne({
+      shopDomain: shop,
+      cartId: cartData.id,
     });
-    
+
     if (cart) {
       cart.updatedAt = new Date();
       cart.cartData = cartData;
-      
+
       if (cartData.customer) {
         cart.customer = {
           id: cartData.customer.id,
           firstName: cartData.customer.first_name,
           lastName: cartData.customer.last_name,
           email: cartData.customer.email,
-          phone: cartData.customer.phone
+          phone: cartData.customer.phone,
         };
       }
-      
+
       await cart.save();
       return cart;
-    } else {
-      // If cart doesn't exist, create it
-      return storeCart(shop, cartData);
     }
+    // If cart doesn't exist, create it
+    return storeCart(shop, cartData);
   } catch (error) {
     console.error('Error updating cart:', error);
     throw error;
@@ -105,18 +103,18 @@ const updateCart = async (shop, cartData) => {
  */
 const markCartAsConverted = async (shop, cartToken) => {
   try {
-    const cart = await Cart.findOne({ 
-      shopDomain: shop, 
-      cartToken: cartToken 
+    const cart = await Cart.findOne({
+      shopDomain: shop,
+      cartToken: cartToken,
     });
-    
+
     if (cart) {
       cart.converted = true;
       cart.convertedAt = new Date();
       await cart.save();
       return cart;
     }
-    
+
     return null;
   } catch (error) {
     console.error('Error marking cart as converted:', error);
@@ -132,7 +130,7 @@ const getAbandonedCarts = async (shop, hoursThreshold = 24) => {
     // Calculate the timestamp for X hours ago
     const threshold = new Date();
     threshold.setHours(threshold.getHours() - hoursThreshold);
-    
+
     // Find carts that:
     // 1. Haven't been updated in X hours
     // 2. Haven't been converted
@@ -143,9 +141,9 @@ const getAbandonedCarts = async (shop, hoursThreshold = 24) => {
       updatedAt: { $lt: threshold },
       converted: false,
       reminderSent: false,
-      'customer.phone': { $exists: true, $ne: null }
+      'customer.phone': { $exists: true, $ne: null },
     });
-    
+
     return abandonedCarts;
   } catch (error) {
     console.error('Error getting abandoned carts:', error);
@@ -159,14 +157,14 @@ const getAbandonedCarts = async (shop, hoursThreshold = 24) => {
 const recordReminderSent = async (cartId) => {
   try {
     const cart = await Cart.findOne({ cartId });
-    
+
     if (cart) {
       cart.reminderSent = true;
       cart.reminderSentAt = new Date();
       await cart.save();
       return cart;
     }
-    
+
     return null;
   } catch (error) {
     console.error('Error recording reminder sent:', error);
@@ -181,32 +179,32 @@ const processShopAbandonedCarts = async (shop) => {
   try {
     // Get shop settings
     const settings = await settingsService.getShopSettings(shop);
-    
+
     // Skip if feature is disabled
     if (!settings.abandonedCartReminders || !settings.abandonedCartReminders.enabled) {
-      return { 
-        success: true, 
+      return {
+        success: true,
         message: 'Abandoned cart reminders are disabled for this shop',
-        processed: 0
+        processed: 0,
       };
     }
-    
+
     // Skip if CCAI credentials are not configured
     if (!settings.ccai || !settings.ccai.clientId || !settings.ccai.apiKey) {
-      return { 
-        success: false, 
+      return {
+        success: false,
         error: 'CloudContactAI credentials not configured',
-        processed: 0
+        processed: 0,
       };
     }
-    
+
     // Initialize SMS service with shop's CCAI credentials
     const sms = new SMSService(settings.ccai.clientId, settings.ccai.apiKey);
-    
+
     // Get abandoned carts
     const hourThreshold = settings.abandonedCartReminders.hourThreshold || 24;
     const abandonedCarts = await getAbandonedCarts(shop, hourThreshold);
-    
+
     // Process each abandoned cart
     const results = [];
     for (const cart of abandonedCarts) {
@@ -215,21 +213,22 @@ const processShopAbandonedCarts = async (shop) => {
         if (!cart.customer || !cart.customer.phone) {
           continue;
         }
-        
+
         // Generate cart recovery URL
         const cartUrl = `https://${shop}/cart/${cart.cartToken}`;
-        
+
         // Get message template or use default
-        const messageTemplate = settings.abandonedCartReminders.messageTemplate || 
+        const messageTemplate =
+          settings.abandonedCartReminders.messageTemplate ||
           'Hi ${firstName}, you have items waiting in your cart at ${shopName}. Complete your purchase here: ${cartUrl}';
-        
+
         // Replace variables in template
         const message = messageTemplate
           .replace('${firstName}', cart.customer.firstName || 'there')
           .replace('${lastName}', cart.customer.lastName || '')
           .replace('${shopName}', settings.shopName || shop.split('.')[0])
           .replace('${cartUrl}', cartUrl);
-        
+
         // Send SMS
         const result = await sms.sendSingle(
           cart.customer.firstName || '',
@@ -238,34 +237,34 @@ const processShopAbandonedCarts = async (shop) => {
           message,
           `${settings.shopName || shop} - Cart Reminder`
         );
-        
+
         // Record that reminder was sent
         if (result.success) {
           await recordReminderSent(cart.cartId);
         }
-        
+
         results.push({
           cartId: cart.cartId,
           customer: `${cart.customer.firstName} ${cart.customer.lastName}`,
           phone: cart.customer.phone,
           success: result.success,
           messageId: result.messageId,
-          error: result.error
+          error: result.error,
         });
       } catch (error) {
         console.error(`Error processing cart ${cart.cartId}:`, error);
         results.push({
           cartId: cart.cartId,
           success: false,
-          error: error.message
+          error: error.message,
         });
       }
     }
-    
+
     return {
       success: true,
       processed: results.length,
-      results
+      results,
     };
   } catch (error) {
     console.error(`Error processing abandoned carts for ${shop}:`, error);
@@ -279,5 +278,5 @@ module.exports = {
   markCartAsConverted,
   getAbandonedCarts,
   recordReminderSent,
-  processShopAbandonedCarts
+  processShopAbandonedCarts,
 };

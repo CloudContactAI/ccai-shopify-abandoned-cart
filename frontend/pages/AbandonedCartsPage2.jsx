@@ -1,22 +1,26 @@
 import { useAppBridge } from '@shopify/app-bridge-react';
-import { authenticatedFetch } from '@shopify/app-bridge-utils';
+import { authenticatedFetch, getSessionToken } from '@shopify/app-bridge-utils';
 import {
   Badge,
   Banner,
   Card,
   EmptyState,
-  Filters,
   Layout,
   Page,
   Pagination,
   ResourceList,
-  ResourceItem, // ✅ Import fixed
   Select,
   SkeletonBodyText,
   Text,
 } from '@shopify/polaris';
+
+import { ResourceItem } from '@shopify/polaris';
+console.log('✅ ResourceItem is:', ResourceItem);
+console.log('✅ ResourceItem is:', ResourceList);
+
+
 import { useQuery } from '@tanstack/react-query';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 import { useShop } from '../ShopContext';
 
@@ -35,22 +39,37 @@ const TYPE_BADGES = {
 const getStatusBadge = (status) => STATUS_BADGES[status] ?? <Badge>Unknown</Badge>;
 const getTypeBadge = (type) => TYPE_BADGES[type] ?? <Badge>Other</Badge>;
 
-const SMSHistoryPage = () => {
+const AbandonedCartsPage = () => {
   const [page, setPage] = useState(1);
-  const [typeFilter, setTypeFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('abandoned_cart');
 
   const app = useAppBridge();
   const fetch = authenticatedFetch(app);
   const { shop, host, loading: contextLoading, error: contextError } = useShop();
 
+  useEffect(() => {
+    if (app) {
+      getSessionToken(app)
+        .then((token) => {
+          console.log('🪪 Session token for manual testing:', token);
+        })
+        .catch((err) => {
+          console.error('❌ Failed to fetch session token:', err);
+        });
+    }
+  }, [app]);
+
   const { data, isLoading, isError, error } = useQuery(
-    ['sms-history', page, typeFilter, shop],
+    ['abandoned-cart-history', page, typeFilter, shop],
     async () => {
       if (!shop) throw new Error('Shop is not defined');
-      let url = `/api/sms-history?page=${page}&limit=20`;
-      if (typeFilter !== 'all') url += `&type=${typeFilter}`;
+      const url = `/api/sms-history?page=${page}&limit=20&type=${typeFilter}`;
       const response = await fetch(url);
-      if (!response.ok) throw new Error('Failed to fetch SMS history');
+
+      console.log('[Fetch] Response status:', response.status);
+      console.log('[Fetch] Headers:', Object.fromEntries(response.headers.entries()));
+
+      if (!response.ok) throw new Error('Failed to fetch abandoned cart messages');
       return response.json();
     },
     { enabled: !!shop }
@@ -63,7 +82,7 @@ const SMSHistoryPage = () => {
 
   if (contextLoading || isLoading) {
     return (
-      <Page title="SMS History">
+      <Page title="Abandoned Cart Messages">
         <Banner title="🔄 Loading..." status="info">
           <p>Shop: {shop}</p>
           <p>Host: {host}</p>
@@ -81,7 +100,7 @@ const SMSHistoryPage = () => {
 
   if (contextError) {
     return (
-      <Page title="SMS History">
+      <Page title="Abandoned Cart Messages">
         <Banner title="Context error" status="critical">
           <p>{contextError}</p>
           <p>Shop: {shop}</p>
@@ -93,9 +112,8 @@ const SMSHistoryPage = () => {
 
   if (!shop) {
     return (
-      <Page title="SMS History">
+      <Page title="Abandoned Cart Messages">
         <Banner title="Missing shop context" status="warning">
-          <p>Shop: {shop}</p>
           <p>This page requires a valid shop. Try reloading from the Shopify admin.</p>
         </Banner>
       </Page>
@@ -104,8 +122,8 @@ const SMSHistoryPage = () => {
 
   if (isError) {
     return (
-      <Page title="SMS History">
-        <Banner title="Error loading SMS history" status="critical">
+      <Page title="Abandoned Cart Messages">
+        <Banner title="Error loading abandoned carts" status="critical">
           <p>{error?.message || 'An unknown error occurred.'}</p>
         </Banner>
       </Page>
@@ -114,8 +132,8 @@ const SMSHistoryPage = () => {
 
   if (!Array.isArray(data?.history) || data.history.length === 0) {
     return (
-      <Page title="SMS History">
-        <Banner title="No SMS History" status="info">
+      <Page title="Abandoned Cart Messages">
+        <Banner title="No Abandoned Cart Messages" status="info">
           <p>Shop: {shop}</p>
           <p>Host: {host}</p>
         </Banner>
@@ -123,12 +141,11 @@ const SMSHistoryPage = () => {
           <Layout.Section>
             <Card sectioned>
               <EmptyState
-                heading="No SMS history found"
+                heading="No abandoned cart messages found"
                 image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
               >
                 <p>
-                  No SMS messages have been sent yet. Try sending a test message from the settings
-                  page or wait for abandoned cart reminders to be sent.
+                  No messages have been sent for abandoned carts yet. Try enabling recovery or send a test message from the settings page.
                 </p>
               </EmptyState>
             </Card>
@@ -139,18 +156,45 @@ const SMSHistoryPage = () => {
   }
 
   return (
-    <Page title="SMS History">
+    <Page title="Abandoned Cart Messages">
+      <Banner title="🔍 Page mounted" status="info">
+        <p>Shop: {shop}</p>
+        <p>Host: {host}</p>
+      </Banner>
       <Layout>
         <Layout.Section>
           <Card>
+            <Card.Section title="Message Type">
+              <Select
+                label="Type"
+                options={[
+                  { label: 'Abandoned Cart', value: 'abandoned_cart' },
+                  { label: 'Test', value: 'test' },
+                  { label: 'Other', value: 'other' },
+                ]}
+                value={typeFilter}
+                onChange={setTypeFilter}
+              />
+            </Card.Section>
+
             <ResourceList
               resourceName={{ singular: 'message', plural: 'messages' }}
               items={data.history}
               renderItem={(sms) => {
-                if (!sms || !sms._id) return null;
+                //console.log('[🔍 sms item]', sms);
+
+                if (!sms || !sms._id) {
+                  return (
+                    <ResourceItem id="missing" accessibilityLabel="Missing SMS data">
+                      <Text>{sms?.message ?? 'No message content available.'}</Text>
+                    </ResourceItem>
+                  );
+                }
+
                 const recipientName =
-                  `${sms.recipient?.firstName ?? ''} ${sms.recipient?.lastName ?? ''}`.trim() ||
-                  'Unknown Recipient';
+                  typeof sms.recipient === 'object' && sms.recipient !== null
+                    ? `${sms.recipient.firstName ?? ''} ${sms.recipient.lastName ?? ''}`.trim() || 'Unknown Recipient'
+                    : 'Unknown Recipient';
 
                 return (
                   <ResourceItem id={sms._id} accessibilityLabel={`SMS to ${recipientName}`}>
@@ -210,4 +254,4 @@ const SMSHistoryPage = () => {
   );
 };
 
-export default SMSHistoryPage;
+export default AbandonedCartsPage;

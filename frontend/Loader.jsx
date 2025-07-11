@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
 import createApp from '@shopify/app-bridge';
 import { getSessionToken } from '@shopify/app-bridge-utils';
+import { useEffect } from 'react';
 import { useShop } from './ShopContext';
 
 const Loader = () => {

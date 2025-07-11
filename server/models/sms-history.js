@@ -4,47 +4,47 @@ const SMSHistorySchema = new mongoose.Schema({
   shopDomain: {
     type: String,
     required: true,
-    index: true
+    index: true,
   },
   recipient: {
     firstName: String,
     lastName: String,
     phone: {
       type: String,
-      required: true
-    }
+      required: true,
+    },
   },
   message: {
     type: String,
-    required: true
+    required: true,
   },
   title: {
-    type: String
+    type: String,
   },
   messageId: {
-    type: String
+    type: String,
   },
   status: {
     type: String,
     enum: ['sent', 'delivered', 'failed', 'unknown'],
-    default: 'unknown'
+    default: 'unknown',
   },
   error: {
-    type: String
+    type: String,
   },
   timestamp: {
     type: Date,
     default: Date.now,
-    index: true
+    index: true,
   },
   type: {
     type: String,
     enum: ['abandoned_cart', 'test', 'other'],
-    default: 'other'
+    default: 'other',
   },
   cartId: {
-    type: String
-  }
+    type: String,
+  },
 });
 
 // Create index for querying by shop and timestamp

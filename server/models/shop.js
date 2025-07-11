@@ -5,29 +5,29 @@ const ShopSchema = new mongoose.Schema({
     type: String,
     required: true,
     unique: true,
-    index: true
+    index: true,
   },
   accessToken: {
     type: String,
-    required: true
+    required: true,
   },
   isActive: {
     type: Boolean,
-    default: true
+    default: true,
   },
   installedAt: {
     type: Date,
-    default: Date.now
+    default: Date.now,
   },
   uninstalledAt: {
-    type: Date
+    type: Date,
   },
   shopifyPlan: {
-    type: String
+    type: String,
   },
   shopifyId: {
-    type: String
-  }
+    type: String,
+  },
 });
 
 module.exports = mongoose.model('Shop', ShopSchema);

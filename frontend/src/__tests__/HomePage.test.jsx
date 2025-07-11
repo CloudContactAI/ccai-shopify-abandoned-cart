@@ -1,6 +1,6 @@
-import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { render, screen, waitFor } from '@testing-library/react';
+import React from 'react';
 import { BrowserRouter } from 'react-router-dom';
 import HomePage from '../pages/HomePage';
 
@@ -41,9 +41,7 @@ const mockUseQueryForSettings = (settingsData) => {
 const renderWithProviders = (component) => {
   return render(
     <BrowserRouter>
-      <QueryClientProvider client={queryClient}>
-        {component}
-      </QueryClientProvider>
+      <QueryClientProvider client={queryClient}>{component}</QueryClientProvider>
     </BrowserRouter>
   );
 };
@@ -61,7 +59,7 @@ describe('HomePage', () => {
     }));
 
     renderWithProviders(<HomePage />);
-    
+
     expect(screen.getByText('CloudContactAI Abandoned Cart Reminders')).toBeInTheDocument();
   });
 
@@ -78,10 +76,12 @@ describe('HomePage', () => {
     });
 
     renderWithProviders(<HomePage />);
-    
+
     await waitFor(() => {
       expect(screen.getByText('Setup Required')).toBeInTheDocument();
-      expect(screen.getByText(/You need to configure your CloudContactAI credentials/)).toBeInTheDocument();
+      expect(
+        screen.getByText(/You need to configure your CloudContactAI credentials/)
+      ).toBeInTheDocument();
     });
   });
 
@@ -98,10 +98,12 @@ describe('HomePage', () => {
     });
 
     renderWithProviders(<HomePage />);
-    
+
     await waitFor(() => {
       expect(screen.getByText('Reminders Disabled')).toBeInTheDocument();
-      expect(screen.getByText(/Abandoned cart reminders are currently disabled/)).toBeInTheDocument();
+      expect(
+        screen.getByText(/Abandoned cart reminders are currently disabled/)
+      ).toBeInTheDocument();
     });
   });
 
@@ -143,7 +145,7 @@ describe('HomePage', () => {
     });
 
     renderWithProviders(<HomePage />);
-    
+
     await waitFor(() => {
       expect(screen.getByText('Reminders Active')).toBeInTheDocument();
       expect(screen.getByText(/Your abandoned cart reminders are active/)).toBeInTheDocument();

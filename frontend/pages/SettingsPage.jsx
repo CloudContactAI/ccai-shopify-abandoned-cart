@@ -1,20 +1,20 @@
-import React, { useState } from 'react';
-import {
-  Page,
-  Layout,
-  Card,
-  FormLayout,
-  TextField,
-  Button,
-  SettingToggle,
-  Banner,
-  Select,
-  Toast,
-  Text,
-} from '@shopify/polaris';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAppBridge } from '@shopify/app-bridge-react';
 import { authenticatedFetch } from '@shopify/app-bridge-utils';
+import {
+  Banner,
+  Button,
+  Card,
+  FormLayout,
+  Layout,
+  Page,
+  Select,
+  SettingToggle,
+  Text,
+  TextField,
+  Toast,
+} from '@shopify/polaris';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import React, { useState } from 'react';
 
 import { useShop } from '../ShopContext';
 
@@ -36,11 +36,16 @@ const SettingsPage = () => {
 
   const { shop } = useShop();
 
-  const { data: settings, isLoading, isError, error } = useQuery(
+  const {
+    data: settings,
+    isLoading,
+    isError,
+    error,
+  } = useQuery(
     ['settings'],
     async () => {
       if (!shop) throw new Error('Shop is not defined');
-      const response = await fetch(`/api/settings`);
+      const response = await fetch('/api/settings');
       if (!response.ok) throw new Error('Failed to fetch settings');
       return response.json();
     },
@@ -50,7 +55,7 @@ const SettingsPage = () => {
   const updateSettings = useMutation(
     async (newSettings) => {
       if (!shop) throw new Error('Shop is not defined');
-      const response = await fetch(`/api/settings`, {
+      const response = await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newSettings),
@@ -79,7 +84,7 @@ const SettingsPage = () => {
     setIsSendingTest(true);
     setTestResult(null);
     try {
-      const response = await fetch(`/api/test-sms`, {
+      const response = await fetch('/api/test-sms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(testSMS),
@@ -231,14 +236,16 @@ const SettingsPage = () => {
                   options={hourOptions}
                   value={settings?.abandonedCartReminders?.hourThreshold?.toString() ?? '24'}
                   onChange={(value) =>
-                    handleChange('abandonedCartReminders.hourThreshold', parseInt(value, 10))
+                    handleChange('abandonedCartReminders.hourThreshold', Number.parseInt(value, 10))
                   }
                   helpText="Time after which a cart is considered abandoned"
                 />
                 <TextField
                   label="Message Template"
                   value={settings?.abandonedCartReminders?.messageTemplate ?? ''}
-                  onChange={(value) => handleChange('abandonedCartReminders.messageTemplate', value)}
+                  onChange={(value) =>
+                    handleChange('abandonedCartReminders.messageTemplate', value)
+                  }
                   multiline={3}
                   helpText="Use ${firstName}, ${lastName}, ${shopName}, and ${cartUrl} as variables"
                 />
@@ -290,7 +297,7 @@ const SettingsPage = () => {
                   multiline={2}
                   helpText="Leave blank to use default template"
                 />
-                                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                   <Button
                     primary
                     onClick={sendTestSMS}

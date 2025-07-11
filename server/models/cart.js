@@ -4,68 +4,68 @@ const CartSchema = new mongoose.Schema({
   shopDomain: {
     type: String,
     required: true,
-    index: true
+    index: true,
   },
   cartId: {
     type: String,
     required: true,
-    index: true
+    index: true,
   },
   cartToken: {
     type: String,
-    required: true
+    required: true,
   },
   customer: {
     id: String,
     firstName: String,
     lastName: String,
     email: String,
-    phone: String
+    phone: String,
   },
   cartData: {
     type: mongoose.Schema.Types.Mixed,
-    required: true
+    required: true,
   },
   createdAt: {
     type: Date,
-    default: Date.now
+    default: Date.now,
   },
   updatedAt: {
     type: Date,
-    default: Date.now
+    default: Date.now,
   },
   isAbandoned: {
     type: Boolean,
-    default: false
+    default: false,
   },
   abandonedAt: {
-    type: Date
+    type: Date,
   },
   reminderSent: {
     type: Boolean,
-    default: false
+    default: false,
   },
   reminderSentAt: {
-    type: Date
+    type: Date,
   },
   converted: {
     type: Boolean,
-    default: false
+    default: false,
   },
   convertedAt: {
-    type: Date
-  }
+    type: Date,
+  },
 });
 
-// Create a compound index for shop and cart ID
+// 🔁 Compound index to uniquely identify carts per shop
 CartSchema.index({ shopDomain: 1, cartId: 1 }, { unique: true });
 
-// Create an index for finding abandoned carts
-CartSchema.index({ 
-  shopDomain: 1, 
-  updatedAt: 1, 
-  converted: 1, 
-  reminderSent: 1 
+// 🔍 Index to efficiently query abandoned carts
+CartSchema.index({
+  shopDomain: 1,
+  updatedAt: 1,
+  converted: 1,
+  reminderSent: 1,
 });
 
 module.exports = mongoose.model('Cart', CartSchema);

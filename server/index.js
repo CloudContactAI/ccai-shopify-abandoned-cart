@@ -1,31 +1,27 @@
-require('dotenv').config();
-console.log("📦 Environment variables loaded from .env file");
-console.log("Shopify API Key:", process.env.SHOPIFY_API_KEY);
-
+require('dotenv').config({ path: '../.env' });
 const mongoose = require('mongoose');
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const session = require('express-session');
-const { resolve } = require('path');
+const { resolve } = require('node:path');
 const compression = require('compression');
 const cron = require('node-cron');
 const serveStatic = require('serve-static');
 
-const { shopifyApp } = require('@shopify/shopify-app-express');
 const { shopifyApi, LATEST_API_VERSION } = require('@shopify/shopify-api');
-const { SQLiteSessionStorage } = require('@shopify/shopify-app-session-storage-sqlite');
-
+const { shopify } = require('./shopify');
 const apiRoutes = require('./handlers/api');
-const webhookHandlers = require('./handlers/webhooks');
+const Cart = require('./models/cart');
+const Shop = require('./models/shop');
 const { processAbandonedCarts } = require('./jobs/abandoned-cart');
 
 const app = express();
-const PORT = parseInt(process.env.PORT || "8081", 10);
+const PORT = Number.parseInt(process.env.PORT || '8081', 10);
 
-// Connect to MongoDB
+// 🔌 MongoDB Connection
 mongoose.connect(process.env.MONGODB_URI, {
   useNewUrlParser: true,
-  useUnifiedTopology: true,
+  useUnifiedTopology: true
 })
 .then(() => console.log('✅ Connected to MongoDB'))
 .catch((err) => {
@@ -33,42 +29,35 @@ mongoose.connect(process.env.MONGODB_URI, {
   process.exit(1);
 });
 
-// Middleware: Content Security Policy
-app.use((req, res, next) => {
+// 🛡️ Security headers for Shopify embedding
+app.use((_req, res, next) => {
   res.setHeader(
     'Content-Security-Policy',
-    "frame-ancestors https://*.myshopify.com https://admin.shopify.com"
+    'frame-ancestors https://*.myshopify.com https://admin.shopify.com'
   );
   next();
 });
 
+// 🧠 Core Middleware
 app.use(cookieParser());
 app.use(express.json({
-  verify: (req, res, buf) => {
-    req.rawBody = buf; // for webhook verification
-  }
+  verify: (req, _res, buf) => { req.rawBody = buf; }
 }));
 app.use(compression());
 app.set('trust proxy', 1);
 
-// EXPRESS-SESSION setup - must come BEFORE any routes using req.session
+// 🔐 Session Setup
 app.use(session({
   secret: process.env.SESSION_SECRET || 'some-very-secret-key',
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: process.env.NODE_ENV === 'production', // false on localhost, true on HTTPS/ngrok
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-  },
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
+  }
 }));
 
-// SQLite session storage for Shopify session
-const sessionStorage = new SQLiteSessionStorage(
-  resolve(__dirname, '../database.sqlite')
-);
-
-console.log('📦 SCOPES from .env:', process.env.SHOPIFY_API_SCOPES);
-
+// 🧬 Shopify API setup
 const shopifyApiInstance = shopifyApi({
   apiKey: process.env.SHOPIFY_API_KEY,
   apiSecretKey: process.env.SHOPIFY_API_SECRET,
@@ -78,126 +67,161 @@ const shopifyApiInstance = shopifyApi({
   isEmbeddedApp: true,
 });
 
-const shopify = shopifyApp({
-  api: {
-    apiKey: process.env.SHOPIFY_API_KEY,
-    apiSecretKey: process.env.SHOPIFY_API_SECRET,
-    scopes: process.env.SHOPIFY_API_SCOPES.split(','),
-    hostName: process.env.SHOPIFY_APP_URL.replace(/^https:\/\//, ''),
-    apiVersion: LATEST_API_VERSION,
-    isEmbeddedApp: true,
-  },
-  auth: {
-    path: '/auth',
-    callbackPath: '/auth/callback',
-    cookieOptions: {
-      sameSite: 'none',
-      secure: true,
-    },
-  },
-  sessionStorage,
-  webhooks: {
-    path: '/webhooks',
-  },
-});
+// 🔄 OAuth Callback
+app.use('/auth/callback', shopify.auth.callback());
 
-// OAuth callback - save shop domain into express-session before redirect
-app.use('/auth/callback', shopify.auth.callback(), async (req, res) => {
+app.get('/auth/callback', async (req, res) => {
   try {
     const session = res.locals.shopify.session;
-    req.session.shop = session.shop;
-    await new Promise((resolve, reject) => {
-      req.session.save(err => (err ? reject(err) : resolve()));
-    });
+    const shop = session.shop;
     const host = req.query.host;
-    res.redirect(`/?shop=${session.shop}&host=${host}`);
+
+    req.session.shop = shop;
+    req.session.host = host;
+
+    await Shop.findOneAndUpdate(
+      { shopDomain: shop },
+      {
+        shopDomain: shop,
+        isActive: true,
+        accessToken: session.accessToken,
+        installedAt: new Date(),
+        scopes: process.env.SHOPIFY_API_SCOPES,
+      },
+      { upsert: true, new: true }
+    );
+
+    await new Promise((resolve, reject) => {
+      req.session.save((err) => err ? reject(err) : resolve());
+    });
+
+    const registrationSuccess = await shopifyApiInstance.webhooks.register({
+      session,
+      webhookHandlers: {
+        'customers/create': async (_topic, _shop, body) => {
+          const payload = JSON.parse(body);
+          if (payload.phone) {
+            try {
+              console.log(`📲 Sending SMS to ${payload.phone}`);
+            } catch (smsError) {
+              console.error('SMS sending error:', smsError);
+            }
+          } else {
+            console.log('⚠️ No phone in payload');
+          }
+        }
+      }
+    });
+
+    if (!registrationSuccess) {
+      console.warn('❌ Webhook registration failed');
+    } else {
+      console.log('✅ customers/create webhook registered');
+    }
+
+    res.redirect(`/?shop=${shop}&host=${host}`);
   } catch (error) {
-    console.error('Error in auth callback:', error);
-    res.status(500).send('Authentication error');
+    console.error('❌ Auth callback error:', error);
+    res.status(500).send('Authentication failed');
   }
 });
 
-// Debug logging on /auth route
-app.use('/auth', (req, res, next) => {
+// 🚀 Begin OAuth
+app.use('/auth', (req, _res, next) => {
   console.log('[DEBUG /auth] Incoming request:', req.query);
   next();
 }, shopify.auth.begin());
 
-// Webhook handling
+// 🕸️ Webhooks
 app.post('/webhooks/:topic', async (req, res) => {
   try {
-    const topic = req.params.topic.replace(/-/g, '/');
     const response = await shopifyApiInstance.webhooks.process({
       rawBody: req.rawBody,
       rawRequest: req,
-      rawResponse: res,
+      rawResponse: res
     });
-    if (!response.success) throw new Error('Webhook not processed: ' + topic);
+
+    if (!response.success) throw new Error(`Webhook failed for topic ${req.params.topic}`);
     res.status(200).send('Webhook processed');
-  } catch (err) {
-    console.error('Webhook error:', err);
-    res.status(500).send('Webhook Error');
+  } catch (error) {
+    console.error('❌ Webhook error:', error);
+    res.status(500).send('Webhook failed');
   }
 });
 
-// API routes with authenticated Shopify session
-app.use('/api', shopify.validateAuthenticatedSession(), apiRoutes);
+// 🧪 Manual test cart
+app.post('/store-cart', async (req, res) => {
+  try {
+    const cart = new Cart({
+      shopDomain: 'ccai-andreas-test.myshopify.com',
+      cartId: 'test123',
+      cartToken: 'abc123token',
+      customer: {
+        id: 'cust001',
+        firstName: 'Jane',
+        lastName: 'Doe',
+        email: 'jane@example.com',
+        phone: '+15551234567',
+      },
+      cartData: {
+        line_items: [{ title: 'Sample Item', quantity: 1, price: '29.99' }],
+        currency: 'USD',
+        subtotal: '29.99',
+      },
+      isAbandoned: true,
+      abandonedAt: new Date(Date.now() - 20 * 60 * 1000),
+    });
 
-// Serve React frontend static files
-app.use(serveStatic(resolve(__dirname, '../frontend/dist')));
-
-// Loader route for SPA direct navigation
-app.get('/loader', (req, res) => {
-  res.sendFile(resolve(__dirname, '../frontend/dist/index.html'));
+    await cart.save();
+    res.status(200).json({ success: true, cart });
+  } catch (error) {
+    console.error('❌ Failed to store cart:', error.message);
+    res.status(500).json({ error: error.message });
+  }
 });
 
-// Local dev landing page
-app.get("/", (req, res) => {
-  const shop = 'ccai-andreas-test.myshopify.com';
+// 🔐 Protected API routes
+app.use('/api', shopify.validateAuthenticatedSession(), apiRoutes);
+
+// 🌐 Serve frontend
+app.use(serveStatic(resolve(__dirname, '../frontend/dist')));
+app.get('/loader', (_req, res) => {
+  res.sendFile(resolve(__dirname, '../frontend/dist/index.html'));
+});
+app.get('/', (_req, res) => {
   res.send(`
     <h2>👋 Welcome to Test1Andreas</h2>
     <p>Your Shopify app backend is running.</p>
-    <a href="/auth?shop=${shop}">→ Click here to install the app</a>
+    <a href="/auth?shop=ccai-andreas-test.myshopify.com">→ Click here to install the app</a>
   `);
 });
 
-// Middleware to ensure 'shop' query param is always present
+// 🛡️ Redirect Middleware for Embedded Context
 app.use((req, res, next) => {
-  const whitelist = [
-    '/auth',
-    '/auth/callback',
-    '/webhooks',
-    '/api',
-    '/favicon.ico',
-    '/loader',
-  ];
+  const whitelist = ['/auth', '/auth/callback', '/webhooks', '/api', '/favicon.ico', '/loader', '/store-cart'];
+  if (whitelist.some((path) => req.path.startsWith(path))) return next();
 
-  if (whitelist.some(path => req.path.startsWith(path))) {
-    return next();
+  const { shop, host } = req.query;
+  if (typeof shop !== 'string' || !shop || typeof host !== 'string' || !host) {
+    const fallbackShop = req.session?.shop || 'ccai-andreas-test.myshopify.com';
+    const fallbackHost = req.session?.host || '';
+    const redirectUrl = new URL(req.originalUrl, `https://${req.headers.host}`);
+    redirectUrl.searchParams.set('shop', fallbackShop);
+    if (fallbackHost) redirectUrl.searchParams.set('host', fallbackHost);
+
+    console.log(`⚠️ Redirecting to embedded route with shop: ${fallbackShop}, path: ${req.originalUrl}`);
+    return res.redirect(redirectUrl.toString());
   }
 
-  if (!req.query.shop) {
-    const shopFromSession = req.session?.shop;
-    if (shopFromSession) {
-      const url = new URL(req.originalUrl, `https://${req.headers.host}`);
-      url.searchParams.set('shop', shopFromSession);
-      console.log(`[Middleware] Redirecting to URL with shop query param: ${url.toString()}`);
-      return res.redirect(url.toString());
-    }
-
-    const fallbackShop = 'ccai-andreas-test.myshopify.com';
-    console.log(`[Middleware] No shop param found - redirecting to /auth?shop=${fallbackShop}`);
-    return res.redirect(`/auth?shop=${fallbackShop}`);
-  }
   next();
 });
 
-// Catch-all route for React Router SPA, ensure app installed on shop
-app.get("*", shopify.ensureInstalledOnShop(), (req, res) => {
+// 🧩 Catch-all route
+app.get('*', shopify.ensureInstalledOnShop(), (_req, res) => {
   res.sendFile(resolve(__dirname, '../frontend/dist/index.html'));
 });
 
-// Abandoned cart cron job
+// 🕓 Cron job
 if (process.env.ABANDONED_CART_CHECK_SCHEDULE) {
   cron.schedule(process.env.ABANDONED_CART_CHECK_SCHEDULE, async () => {
     console.log('⏱ Running abandoned cart job...');
@@ -210,9 +234,8 @@ if (process.env.ABANDONED_CART_CHECK_SCHEDULE) {
   });
 }
 
-// Start server
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
 
-module.exports = app;
+module.exports = { app, shopify };

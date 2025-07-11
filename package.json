@@ -15,12 +15,7 @@
     "format:fix": "biome format --write .",
     "prepare": "husky install"
   },
-  "keywords": [
-    "shopify",
-    "abandoned-cart",
-    "sms",
-    "cloudcontactai"
-  ],
+  "keywords": ["shopify", "abandoned-cart", "sms", "cloudcontactai"],
   "author": "CloudContactAI LLC",
   "license": "MIT",
   "dependencies": {
@@ -55,10 +50,7 @@
     "node": ">=18.0.0"
   },
   "lint-staged": {
-    "*.{js,jsx}": [
-      "biome check --apply",
-      "biome format --write"
-    ]
+    "*.{js,jsx}": ["biome check --apply", "biome format --write"]
   },
   "repository": {
     "type": "git",

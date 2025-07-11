@@ -10,10 +10,10 @@ class SMSService {
   constructor(clientId, apiKey) {
     this.ccai = new CCAI({
       clientId,
-      apiKey
+      apiKey,
     });
   }
-  
+
   /**
    * Send an SMS message to a single recipient
    * @param {string} firstName - Recipient's first name
@@ -28,7 +28,7 @@ class SMSService {
     try {
       // Format phone number if needed (ensure E.164 format)
       const formattedPhone = this.formatPhoneNumber(phone);
-      
+
       // Send the SMS
       const response = await this.ccai.sms.sendSingle(
         firstName,
@@ -37,55 +37,55 @@ class SMSService {
         message,
         title
       );
-      
+
       // Record the SMS in history if shop is provided
       if (shop) {
         await this.recordSMSHistory(shop, {
           recipient: {
             firstName,
             lastName,
-            phone: formattedPhone
+            phone: formattedPhone,
           },
           message,
           title,
           messageId: response.id || response.messageId,
           status: response.status || 'sent',
-          timestamp: new Date()
+          timestamp: new Date(),
         });
       }
-      
+
       return {
         success: true,
         messageId: response.id || response.messageId,
         status: response.status || 'sent',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
     } catch (error) {
       console.error('Failed to send SMS:', error);
-      
+
       // Record the failed SMS in history if shop is provided
       if (shop) {
         await this.recordSMSHistory(shop, {
           recipient: {
             firstName,
             lastName,
-            phone
+            phone,
           },
           message,
           title,
           status: 'failed',
           error: error.message,
-          timestamp: new Date()
+          timestamp: new Date(),
         });
       }
-      
+
       return {
         success: false,
-        error: error.message
+        error: error.message,
       };
     }
   }
-  
+
   /**
    * Send an abandoned cart reminder SMS
    * @param {Object} customer - Customer information
@@ -96,14 +96,14 @@ class SMSService {
    */
   async sendAbandonedCartReminder(customer, cartUrl, storeInfo, shop) {
     const { firstName, lastName, phone } = customer;
-    
+
     // Format the message with store name and recovery link
     const message = `Hi ${firstName}, you have items waiting in your cart at ${storeInfo.name}. Complete your purchase here: ${cartUrl}`;
     const title = `${storeInfo.name} - Cart Reminder`;
-    
+
     return this.sendSingle(firstName, lastName, phone, message, title, shop);
   }
-  
+
   /**
    * Format a phone number to E.164 format
    * @param {string} phone - Phone number to format
@@ -111,8 +111,8 @@ class SMSService {
    */
   formatPhoneNumber(phone) {
     // Remove all non-digit characters
-    let digits = phone.replace(/\D/g, '');
-    
+    const digits = phone.replace(/\D/g, '');
+
     // If the number doesn't start with +, add the + sign
     if (!phone.startsWith('+')) {
       // If it's a US/Canada number without country code (10 digits)
@@ -122,10 +122,10 @@ class SMSService {
       // Otherwise just add the + sign
       return `+${digits}`;
     }
-    
+
     return phone;
   }
-  
+
   /**
    * Record an SMS in the history
    * @param {string} shop - Shop domain
@@ -143,9 +143,9 @@ class SMSService {
         status: smsData.status,
         error: smsData.error,
         timestamp: smsData.timestamp || new Date(),
-        type: 'abandoned_cart'
+        type: 'abandoned_cart',
       });
-      
+
       await history.save();
       return history;
     } catch (error) {
@@ -154,7 +154,7 @@ class SMSService {
       return null;
     }
   }
-  
+
   /**
    * Get SMS history for a shop
    * @param {string} shop - Shop domain
@@ -165,23 +165,20 @@ class SMSService {
   static async getSMSHistory(shop, page = 1, limit = 20) {
     try {
       const skip = (page - 1) * limit;
-      
+
       const [history, total] = await Promise.all([
-        SMSHistory.find({ shopDomain: shop })
-          .sort({ timestamp: -1 })
-          .skip(skip)
-          .limit(limit),
-        SMSHistory.countDocuments({ shopDomain: shop })
+        SMSHistory.find({ shopDomain: shop }).sort({ timestamp: -1 }).skip(skip).limit(limit),
+        SMSHistory.countDocuments({ shopDomain: shop }),
       ]);
-      
+
       return {
         history,
         pagination: {
           total,
           page,
           limit,
-          pages: Math.ceil(total / limit)
-        }
+          pages: Math.ceil(total / limit),
+        },
       };
     } catch (error) {
       console.error('Error getting SMS history:', error);

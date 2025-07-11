@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const urlParams = new URLSearchParams(window.location.search);
   let shop = urlParams.get('shop');
-  let host = urlParams.get('host');
+  const host = urlParams.get('host');
   console.log('[Loader] Query string →', { shop, host });
 
   if (!host && shop) {
@@ -47,8 +47,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   if (shop) {
-        const redirectUrl = `/auth?shop=${shop}&host=${host}`;
-        console.log('[Loader] 🔁 Redirecting to:', redirectUrl);
-        window.top.location.href = redirectUrl;
-      }
-    });
+    const redirectUrl = `/auth?shop=${shop}&host=${host}`;
+    console.log('[Loader] 🔁 Redirecting to:', redirectUrl);
+    window.top.location.href = redirectUrl;
+  }
+});

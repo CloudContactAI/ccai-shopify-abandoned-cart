@@ -1,19 +1,19 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import {
-  Page,
-  Layout,
-  Card,
-  TextContainer,
-  SkeletonBodyText,
-  Button,
-  Banner,
-  Text,
-  ProgressBar,
-} from '@shopify/polaris';
-import { useQuery } from '@tanstack/react-query';
 import { useAppBridge } from '@shopify/app-bridge-react';
 import { authenticatedFetch } from '@shopify/app-bridge-utils';
+import {
+  Banner,
+  Button,
+  Card,
+  Layout,
+  Page,
+  ProgressBar,
+  SkeletonBodyText,
+  Text,
+  TextContainer,
+} from '@shopify/polaris';
+import { useQuery } from '@tanstack/react-query';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { useShop } from '../ShopContext';
 
@@ -27,7 +27,12 @@ const HomePage = () => {
   const { shop } = useShop();
 
   // Fetch settings, enabled only if shop is defined
-  const { data: settings, isLoading: settingsLoading, isError: settingsError, error: settingsFetchError } = useQuery(
+  const {
+    data: settings,
+    isLoading: settingsLoading,
+    isError: settingsError,
+    error: settingsFetchError,
+  } = useQuery(
     ['settings', shop],
     async () => {
       if (!shop) throw new Error('Shop is not defined');
@@ -39,7 +44,12 @@ const HomePage = () => {
   );
 
   // Fetch abandoned carts count
-  const { data: abandonedCarts, isLoading: cartsLoading, isError: cartsError, error: cartsFetchError } = useQuery(
+  const {
+    data: abandonedCarts,
+    isLoading: cartsLoading,
+    isError: cartsError,
+    error: cartsFetchError,
+  } = useQuery(
     ['abandoned-carts'],
     async () => {
       if (!shop) throw new Error('Shop is not defined');
@@ -91,7 +101,8 @@ const HomePage = () => {
               action={{ content: 'Configure Now', onAction: () => navigate('/settings') }}
             >
               <Text>
-                You need to configure your CloudContactAI credentials before you can send SMS reminders.
+                You need to configure your CloudContactAI credentials before you can send SMS
+                reminders.
               </Text>
             </Banner>
           ) : !isEnabled ? (
@@ -101,7 +112,8 @@ const HomePage = () => {
               action={{ content: 'Enable Now', onAction: () => navigate('/settings') }}
             >
               <Text>
-                Abandoned cart reminders are currently disabled. Enable them in settings to start recovering lost sales.
+                Abandoned cart reminders are currently disabled. Enable them in settings to start
+                recovering lost sales.
               </Text>
             </Banner>
           ) : (
@@ -155,8 +167,8 @@ const HomePage = () => {
                   {isEnabled
                     ? 'Your abandoned cart recovery system is fully operational.'
                     : isConfigured
-                    ? 'Almost there! Enable reminders in settings to complete setup.'
-                    : 'Get started by configuring your CloudContactAI credentials.'}
+                      ? 'Almost there! Enable reminders in settings to complete setup.'
+                      : 'Get started by configuring your CloudContactAI credentials.'}
                 </Text>
               </TextContainer>
             )}
@@ -190,9 +202,7 @@ const HomePage = () => {
                     </Banner>
                   ) : (
                     <Banner title="Success" status="success">
-                      <Text>
-                        Successfully processed {triggerResult.processed} abandoned carts.
-                      </Text>
+                      <Text>Successfully processed {triggerResult.processed} abandoned carts.</Text>
                     </Banner>
                   )}
                 </div>

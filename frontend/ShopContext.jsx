@@ -8,26 +8,23 @@ const ShopContext = createContext({
 });
 
 export const ShopProvider = ({ children, shopOrigin, host }) => {
-  const [shop, setShop] = useState(() => shopOrigin || localStorage.getItem('shop'));
-  const [storedHost, setStoredHost] = useState(() => host || localStorage.getItem('host'));
+  const [shop, setShop] = useState(null);
+  const [storedHost, setStoredHost] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    // Save to localStorage if passed in
-    if (shopOrigin) {
-      setShop(shopOrigin);
-      localStorage.setItem('shop', shopOrigin);
+    const searchParams = new URLSearchParams(window.location.search);
+    const hostFromUrl = host || searchParams.get('host') || localStorage.getItem('host');
+    const shopFromUrl = shopOrigin || searchParams.get('shop') || localStorage.getItem('shop');
+
+    if (shopFromUrl && hostFromUrl) {
+      setShop(shopFromUrl);
+      setStoredHost(hostFromUrl);
+      localStorage.setItem('shop', shopFromUrl);
+      localStorage.setItem('host', hostFromUrl);
       setLoading(false);
-    }
-
-    if (host) {
-      setStoredHost(host);
-      localStorage.setItem('host', host);
-    }
-
-    // Fallback to backend if shop is still undefined
-    if (!shopOrigin && !shop) {
+    } else {
       fetch('/api/shop')
         .then((res) => {
           if (!res.ok) throw new Error('Failed to fetch shop');
@@ -43,11 +40,11 @@ export const ShopProvider = ({ children, shopOrigin, host }) => {
         })
         .catch((err) => {
           console.error('❌ Error fetching shop:', err);
-          setError('No shop found in session, URL, or storage. Please launch the app from the Shopify Admin.');
+          setError(
+            'No shop found in session, URL, or storage. Please launch the app from the Shopify Admin.'
+          );
         })
         .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
     }
   }, [shopOrigin, host]);
 

@@ -1,21 +1,26 @@
-import React, { useState } from 'react';
-import {
-  Page,
-  Layout,
-  Card,
-  ResourceList,
-  Badge,
-  Pagination,
-  EmptyState,
-  Filters,
-  Select,
-  Text,
-  SkeletonBodyText,
-  Banner,
-} from '@shopify/polaris';
-import { useQuery } from '@tanstack/react-query';
 import { useAppBridge } from '@shopify/app-bridge-react';
-import { authenticatedFetch } from '@shopify/app-bridge-utils';
+import { authenticatedFetch, getSessionToken } from '@shopify/app-bridge-utils';
+import {
+  Badge,
+  Banner,
+  Card,
+  EmptyState,
+  Layout,
+  Page,
+  Pagination,
+  ResourceList,
+  Select,
+  SkeletonBodyText,
+  Text,
+} from '@shopify/polaris';
+
+import { ResourceItem } from '@shopify/polaris';
+console.log('✅ ResourceItem is:', ResourceItem);
+console.log('✅ ResourceItem is:', ResourceList);
+
+
+import { useQuery } from '@tanstack/react-query';
+import React, { useState, useEffect } from 'react';
 
 import { useShop } from '../ShopContext';
 
@@ -42,17 +47,28 @@ const AbandonedCartsPage = () => {
   const fetch = authenticatedFetch(app);
   const { shop, host, loading: contextLoading, error: contextError } = useShop();
 
-  const {
-    data,
-    isLoading,
-    isError,
-    error,
-  } = useQuery(
+  useEffect(() => {
+    if (app) {
+      getSessionToken(app)
+        .then((token) => {
+          console.log('🪪 Session token for manual testing:', token);
+        })
+        .catch((err) => {
+          console.error('❌ Failed to fetch session token:', err);
+        });
+    }
+  }, [app]);
+
+  const { data, isLoading, isError, error } = useQuery(
     ['abandoned-cart-history', page, typeFilter, shop],
     async () => {
       if (!shop) throw new Error('Shop is not defined');
-      let url = `/api/sms-history?page=${page}&limit=20&type=abandoned_cart`;
+      const url = `/api/sms-history?page=${page}&limit=20&type=${typeFilter}`;
       const response = await fetch(url);
+
+      console.log('[Fetch] Response status:', response.status);
+      console.log('[Fetch] Headers:', Object.fromEntries(response.headers.entries()));
+
       if (!response.ok) throw new Error('Failed to fetch abandoned cart messages');
       return response.json();
     },
@@ -67,6 +83,10 @@ const AbandonedCartsPage = () => {
   if (contextLoading || isLoading) {
     return (
       <Page title="Abandoned Cart Messages">
+        <Banner title="🔄 Loading..." status="info">
+          <p>Shop: {shop}</p>
+          <p>Host: {host}</p>
+        </Banner>
         <Layout>
           <Layout.Section>
             <Card sectioned>
@@ -81,13 +101,11 @@ const AbandonedCartsPage = () => {
   if (contextError) {
     return (
       <Page title="Abandoned Cart Messages">
-        <Layout>
-          <Layout.Section>
-            <Banner title="Context error" status="critical">
-              <p>{contextError}</p>
-            </Banner>
-          </Layout.Section>
-        </Layout>
+        <Banner title="Context error" status="critical">
+          <p>{contextError}</p>
+          <p>Shop: {shop}</p>
+          <p>Host: {host}</p>
+        </Banner>
       </Page>
     );
   }
@@ -95,13 +113,9 @@ const AbandonedCartsPage = () => {
   if (!shop) {
     return (
       <Page title="Abandoned Cart Messages">
-        <Layout>
-          <Layout.Section>
-            <Banner title="Missing shop context" status="warning">
-              <p>This page requires a valid shop to display abandoned cart messages. Try reloading from the Shopify admin.</p>
-            </Banner>
-          </Layout.Section>
-        </Layout>
+        <Banner title="Missing shop context" status="warning">
+          <p>This page requires a valid shop. Try reloading from the Shopify admin.</p>
+        </Banner>
       </Page>
     );
   }
@@ -109,13 +123,9 @@ const AbandonedCartsPage = () => {
   if (isError) {
     return (
       <Page title="Abandoned Cart Messages">
-        <Layout>
-          <Layout.Section>
-            <Banner title="Error loading abandoned carts" status="critical">
-              <p>{error?.message || 'An unknown error occurred.'}</p>
-            </Banner>
-          </Layout.Section>
-        </Layout>
+        <Banner title="Error loading abandoned carts" status="critical">
+          <p>{error?.message || 'An unknown error occurred.'}</p>
+        </Banner>
       </Page>
     );
   }
@@ -123,6 +133,10 @@ const AbandonedCartsPage = () => {
   if (!Array.isArray(data?.history) || data.history.length === 0) {
     return (
       <Page title="Abandoned Cart Messages">
+        <Banner title="No Abandoned Cart Messages" status="info">
+          <p>Shop: {shop}</p>
+          <p>Host: {host}</p>
+        </Banner>
         <Layout>
           <Layout.Section>
             <Card sectioned>
@@ -145,47 +159,27 @@ const AbandonedCartsPage = () => {
     <Page title="Abandoned Cart Messages">
       <Layout>
         <Layout.Section>
-          {/* Debug Info — remove when shipping */}
-          <Banner title="Debug Info" status="info">
-            <p>Shop: {shop}</p>
-            <p>Host: {host}</p>
-          </Banner>
-
-          <Card>
-            <Card.Section>
-              <Filters
-                queryValue={typeFilter}
-                onQueryChange={setTypeFilter}
-                queryPlaceholder="Filter by type"
-                filters={[
-                  {
-                    key: 'type',
-                    label: 'Message type',
-                    filter: (
-                      <Select
-                        options={[
-                          { label: 'Abandoned Cart', value: 'abandoned_cart' },
-                          { label: 'Test', value: 'test' },
-                          { label: 'Other', value: 'other' },
-                        ]}
-                        value={typeFilter}
-                        onChange={setTypeFilter}
-                        labelHidden
-                      />
-                    ),
-                  },
-                ]}
-                hideQueryField
-              />
-            </Card.Section>
-
+         <Card>
             <ResourceList
               resourceName={{ singular: 'message', plural: 'messages' }}
               items={data.history}
               renderItem={(sms) => {
-                const recipientName = `${sms.recipient?.firstName ?? ''} ${sms.recipient?.lastName ?? ''}`.trim() || 'Unknown Recipient';
+
+                if (!sms || !sms._id) {
+                  return (
+                    <ResourceItem id="missing" accessibilityLabel="Missing SMS data">
+                      <Text>{sms?.message ?? 'No message content available.'}</Text>
+                    </ResourceItem>
+                  );
+                }
+
+                const recipientName =
+                  typeof sms.recipient === 'object' && sms.recipient !== null
+                    ? `${sms.recipient.firstName ?? ''} ${sms.recipient.lastName ?? ''}`.trim() || 'Unknown Recipient'
+                    : 'Unknown Recipient';
+
                 return (
-                  <ResourceList.Item id={sms._id} accessibilityLabel={`SMS to ${recipientName}`}>
+                  <ResourceItem id={sms._id} accessibilityLabel={`SMS to ${recipientName}`}>
                     <div
                       style={{
                         display: 'flex',
@@ -196,7 +190,9 @@ const AbandonedCartsPage = () => {
                       }}
                     >
                       <div style={{ flex: 1, minWidth: 200 }}>
-                        <Text as="h3" fontWeight="bold">{recipientName}</Text>
+                        <Text as="h3" fontWeight="bold">
+                          {recipientName}
+                        </Text>
                         <Text tone="subdued">Phone: {sms.recipient?.phone ?? 'N/A'}</Text>
                         <Text tone="subdued">Sent: {formatDate(sms.timestamp)}</Text>
                       </div>
@@ -208,7 +204,7 @@ const AbandonedCartsPage = () => {
                     </div>
 
                     <div style={{ marginTop: 10 }}>
-                      <Text>{sms.message}</Text>
+                      <Text>{sms.message ?? 'No message content available.'}</Text>
                     </div>
 
                     {sms.error && (
@@ -216,7 +212,7 @@ const AbandonedCartsPage = () => {
                         <Text tone="critical">Error: {sms.error}</Text>
                       </div>
                     )}
-                  </ResourceList.Item>
+                  </ResourceItem>
                 );
               }}
             />
@@ -229,9 +225,6 @@ const AbandonedCartsPage = () => {
                     onPrevious={() => setPage(page - 1)}
                     hasNext={page < data.pagination.pages}
                     onNext={() => setPage(page + 1)}
-                    accessibilityLabel="Abandoned cart pagination"
-                    accessibilityPreviousLabel="Previous page"
-                    accessibilityNextLabel="Next page"
                   />
                 </div>
               </Card.Section>

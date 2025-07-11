@@ -5,44 +5,45 @@ const SettingsSchema = new mongoose.Schema({
     type: String,
     required: true,
     unique: true,
-    index: true
+    index: true,
   },
   shopName: {
     type: String,
-    required: true
+    required: true,
   },
   abandonedCartReminders: {
     enabled: {
       type: Boolean,
-      default: false
+      default: false,
     },
     hourThreshold: {
       type: Number,
-      default: 24
+      default: 24,
     },
     messageTemplate: {
       type: String,
-      default: 'Hi ${firstName}, you have items waiting in your cart at ${shopName}. Complete your purchase here: ${cartUrl}'
-    }
+      default:
+        'Hi ${firstName}, you have items waiting in your cart at ${shopName}. Complete your purchase here: ${cartUrl}',
+    },
   },
   ccai: {
     clientId: {
       type: String,
-      default: ''
+      default: '',
     },
     apiKey: {
       type: String,
-      default: ''
-    }
+      default: '',
+    },
   },
   createdAt: {
     type: Date,
-    default: Date.now
+    default: Date.now,
   },
   updatedAt: {
     type: Date,
-    default: Date.now
-  }
+    default: Date.now,
+  },
 });
 
 module.exports = mongoose.model('Settings', SettingsSchema);
