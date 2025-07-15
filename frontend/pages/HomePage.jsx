@@ -1,5 +1,4 @@
-import { useAppBridge } from '@shopify/app-bridge-react';
-import { authenticatedFetch } from '@shopify/app-bridge-utils';
+import { useAuthenticatedFetch } from '@shopify/app-bridge-react';
 import {
   Banner,
   Button,
@@ -17,13 +16,12 @@ import { useNavigate } from 'react-router-dom';
 
 import { useShop } from '../ShopContext';
 
-const HomePage = () => {
+export default function HomePage() {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [triggerResult, setTriggerResult] = useState(null);
 
-  const app = useAppBridge();
-  const fetch = authenticatedFetch(app);
+  const fetch = useAuthenticatedFetch();
   const { shop } = useShop();
 
   // Fetch settings, enabled only if shop is defined
@@ -33,14 +31,20 @@ const HomePage = () => {
     isError: settingsError,
     error: settingsFetchError,
   } = useQuery(
-    ['settings', shop],
+    ['settings'],
     async () => {
-      if (!shop) throw new Error('Shop is not defined');
-      const response = await fetch('/api/settings'); // backend can use session to identify shop
-      if (!response.ok) throw new Error('Failed to fetch settings');
-      return response.json();
+      console.log('🔄 Fetching settings...');
+      const response = await fetch('/api/settings');
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Settings fetch failed:', response.status, errorText);
+        throw new Error(`Failed to fetch settings: ${response.status}`);
+      }
+      const data = await response.json();
+      console.log('✅ Settings loaded:', data);
+      return data;
     },
-    { enabled: !!shop }
+    { enabled: true }
   );
 
   // Fetch abandoned carts count
@@ -52,12 +56,18 @@ const HomePage = () => {
   } = useQuery(
     ['abandoned-carts'],
     async () => {
-      if (!shop) throw new Error('Shop is not defined');
+      console.log('🔄 Fetching abandoned carts...');
       const response = await fetch('/api/abandoned-carts');
-      if (!response.ok) throw new Error('Failed to fetch abandoned carts');
-      return response.json();
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Abandoned carts fetch failed:', response.status, errorText);
+        throw new Error(`Failed to fetch abandoned carts: ${response.status}`);
+      }
+      const data = await response.json();
+      console.log('✅ Abandoned carts loaded:', data);
+      return data;
     },
-    { enabled: !!shop }
+    { enabled: true }
   );
 
   const triggerReminders = async () => {
@@ -213,6 +223,4 @@ const HomePage = () => {
       </Layout>
     </Page>
   );
-};
-
-export default HomePage;
+}
