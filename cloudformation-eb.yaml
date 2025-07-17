@@ -1,0 +1,34 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CCAI Shopify Abandoned Cart App - Elastic Beanstalk'
+
+Parameters:
+  AppName:
+    Type: String
+    Default: ccai-shopify-abandoned-cart
+
+Resources:
+  # Elastic Beanstalk Application
+  EBApplication:
+    Type: AWS::ElasticBeanstalk::Application
+    Properties:
+      ApplicationName: !Ref AppName
+
+  # Elastic Beanstalk Environment
+  EBEnvironment:
+    Type: AWS::ElasticBeanstalk::Environment
+    Properties:
+      ApplicationName: !Ref EBApplication
+      EnvironmentName: !Sub ${AppName}-env
+      SolutionStackName: 64bit Amazon Linux 2 v5.8.4 running Node.js 18
+      OptionSettings:
+        - Namespace: aws:elasticbeanstalk:application:environment
+          OptionName: PORT
+          Value: "8081"
+        - Namespace: aws:elasticbeanstalk:application:environment
+          OptionName: MONGODB_URI
+          Value: mongodb+srv://andreas:51ZxbucGZba0Qd5w@andreastest1.chprzb9.mongodb.net/abandoned_carts?retryWrites=true&w=majority&appName=AndreasTest1
+
+Outputs:
+  ApplicationURL:
+    Description: URL of the Elastic Beanstalk application
+    Value: !GetAtt EBEnvironment.EndpointURL

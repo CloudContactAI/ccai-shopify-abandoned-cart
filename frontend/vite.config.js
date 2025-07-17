@@ -16,7 +16,7 @@ export default defineConfig({
     },
   },
   server: {
-    allowedHosts: ['55251a7595ab.ngrok-free.app'], // 👈 Add your ngrok host here
+    allowedHosts: ['131f51df5229.ngrok-free.app'], // 👈 Add your ngrok host here
     proxy: {
       '/api': 'http://localhost:8080', // 👈 redirect API calls to Express
     },

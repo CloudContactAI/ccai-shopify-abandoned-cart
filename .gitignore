@@ -45,3 +45,8 @@ frontend/dist/
 
 # Biome
 .biome/
+
+# Elastic Beanstalk Files
+.elasticbeanstalk/*
+!.elasticbeanstalk/*.cfg.yml
+!.elasticbeanstalk/*.global.yml

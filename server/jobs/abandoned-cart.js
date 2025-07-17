@@ -1,5 +1,10 @@
 const dotenv = require('dotenv');
-dotenv.config({ path: '../.env' }); // ✅ Load env from parent directory
+// Load environment variables based on NODE_ENV
+if (process.env.NODE_ENV === 'production') {
+  dotenv.config({ path: '../.env.production' });
+} else {
+  dotenv.config({ path: '../.env' });
+}
 
 const Shop = require('../models/shop');
 const Cart = require('../models/cart');
@@ -37,6 +42,12 @@ const isAbandoned = (checkout, thresholdMinutes = 15) => {
  */
 const processAbandonedCarts = async () => {
   try {
+    // Check if MongoDB is connected
+    if (!require('mongoose').connection.readyState) {
+      console.log('⚠️ MongoDB not connected, skipping abandoned cart processing');
+      return { totalShops: 0, results: [], error: 'MongoDB not connected' };
+    }
+
     const shops = await Shop.find({ isActive: true });
     console.log(`⏱ Processing abandoned carts for ${shops.length} shops`);
 
@@ -47,8 +58,20 @@ const processAbandonedCarts = async () => {
         console.log(`📦 Checking abandoned carts for ${shop.shopDomain}...`);
         const session = await loadSessionForShop(shop.shopDomain);
         const client = new shopify.api.clients.Rest({ session });
-        const checkoutsRes = await client.get({ path: 'checkouts' });
-        const checkouts = checkoutsRes?.body?.checkouts || [];
+        
+        let checkouts = [];
+        try {
+          const checkoutsRes = await client.get({ path: 'checkouts' });
+          checkouts = checkoutsRes?.body?.checkouts || [];
+        } catch (apiError) {
+          // Handle protected customer data error gracefully
+          if (apiError.message && apiError.message.includes('protected customer data')) {
+            console.log(`⚠️ App not yet approved for protected customer data in ${shop.shopDomain}`);
+            console.log(`ℹ️ Using only locally stored carts until approval`);
+          } else {
+            throw apiError; // Re-throw other errors
+          }
+        }
 
         let processed = 0;
 
@@ -81,11 +104,21 @@ const processAbandonedCarts = async () => {
         }
 
         // ✅ 2. Locally stored MongoDB carts
+        console.log(`🔍 DEBUG: Looking for carts with shopDomain=${shop.shopDomain}, isAbandoned=true, reminderSent=false`);
+        console.log(`🔍 DEBUG: Current time: ${new Date().toISOString()}, Threshold: ${new Date(Date.now() - 1 * 60 * 1000).toISOString()}`);
+        
+        // First check if any carts exist at all
+        const allCarts = await Cart.find({});
+        console.log(`🔍 DEBUG: Total carts in database: ${allCarts.length}`);
+        if (allCarts.length > 0) {
+          console.log(`🔍 DEBUG: First cart: ${JSON.stringify(allCarts[0])}`);
+        }
+        
         const abandonedCarts = await Cart.find({
           shopDomain: shop.shopDomain,
           isAbandoned: true,
           reminderSent: false,
-          abandonedAt: { $lte: new Date(Date.now() - 15 * 60 * 1000) },
+          abandonedAt: { $lte: new Date(Date.now() - 1 * 60 * 1000) }, // 1 minute for testing
         });
 
         console.log(`🔍 Found ${abandonedCarts.length} local abandoned carts`);

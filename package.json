@@ -12,10 +12,15 @@
     "lint": "biome check .",
     "lint:fix": "biome check --apply .",
     "format": "biome format .",
-    "format:fix": "biome format --write .",
-    "prepare": "husky install"
+    "format:fix": "biome format --write ."
+
   },
-  "keywords": ["shopify", "abandoned-cart", "sms", "cloudcontactai"],
+  "keywords": [
+    "shopify",
+    "abandoned-cart",
+    "sms",
+    "cloudcontactai"
+  ],
   "author": "CloudContactAI LLC",
   "license": "MIT",
   "dependencies": {
@@ -32,6 +37,7 @@
     "dotenv": "^16.5.0",
     "express": "^4.18.2",
     "express-session": "^1.18.1",
+    "is-ci": "^4.1.0",
     "mongoose": "^7.8.7",
     "node-cron": "^3.0.2",
     "serve-static": "^1.15.0",
@@ -47,10 +53,13 @@
     "supertest": "^6.3.3"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   },
   "lint-staged": {
-    "*.{js,jsx}": ["biome check --apply", "biome format --write"]
+    "*.{js,jsx}": [
+      "biome check --apply",
+      "biome format --write"
+    ]
   },
   "repository": {
     "type": "git",
